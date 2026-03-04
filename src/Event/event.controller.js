@@ -206,3 +206,111 @@ export const toggleEventAttendance = async (req, res) => {
     });
   }
 };
+
+// Crear evento
+export const createEvent = async (req, res) => {
+  try {
+
+    if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: 'No autorizado' });
+    }
+
+    const {
+      branchId,
+      clientId,
+      name,
+      additionalServices,
+      eventDate,
+      startTime,
+      endTime,
+      numberOfPersons,
+      notes
+    } = req.body;
+
+    // BRANCH_ADMIN y EMPLOYEE solo pueden crear eventos en su sucursal
+    if (
+      (req.user.role === 'BRANCH_ADMIN' || req.user.role === 'EMPLOYEE') &&
+      branchId !== req.user.branchId
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'No autorizado para crear eventos en otra sucursal'
+      });
+    }
+
+    const dateFilter = new Date(eventDate);
+
+    const overlappingEvents = await Event.find({
+      branchId,
+      eventDate: dateFilter,
+      status: { $ne: 'Cancelado' },
+      $or: [
+        { startTime: { $lt: endTime }, endTime: { $gt: startTime } }
+      ]
+    }).select('tables');
+
+    const occupiedTableIds = overlappingEvents.flatMap(event =>
+      event.tables.map(t => t.toString())
+    );
+
+    const availableTables = await Table.find({
+      branchId,
+      TableStatus: 'ACTIVE',
+      availability: { $ne: 'Mantenimiento' },
+      _id: { $nin: occupiedTableIds }
+    }).sort({ capacity: -1 });
+
+    const totalCapacity = availableTables.reduce((acc, table) => acc + table.capacity, 0);
+
+    if (totalCapacity < numberOfPersons) {
+      return res.status(400).json({
+        success: false,
+        message: `Capacidad insuficiente. Espacio disponible: ${totalCapacity}`
+      });
+    }
+
+    let assignedTables = [];
+    let accumulatedCapacity = 0;
+
+    for (const table of availableTables) {
+
+      if (accumulatedCapacity < numberOfPersons) {
+        assignedTables.push(table._id);
+        accumulatedCapacity += table.capacity;
+      } else {
+        break;
+      }
+
+    }
+
+    const newEvent = new Event({
+      branchId,
+      clientId,
+      name,
+      additionalServices,
+      eventDate: dateFilter,
+      startTime,
+      endTime,
+      numberOfPersons,
+      notes,
+      tables: assignedTables
+    });
+
+    await newEvent.save();
+
+    return res.status(201).json({
+      success: true,
+      message: 'Evento creado correctamente',
+      data: newEvent
+    });
+
+  } catch (error) {
+
+    return res.status(500).json({
+      success: false,
+      message: 'Error al crear evento',
+      error: error.message
+    });
+
+  }
+};

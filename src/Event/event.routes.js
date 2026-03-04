@@ -9,13 +9,15 @@ import {
   getEventById,
   updateEvent,
   changeEventStatus,
-  toggleEventAttendance
+  toggleEventAttendance,
+  createEvent
 } from './event.controller.js';
 
 import {
   validateGetEventById,
   validateUpdateEventRequest,
-  validateEventStatusChange
+  validateEventStatusChange,
+  validateCreateEvent
 } from '../../middlewares/event-validator.js';
 
 const router = Router();
@@ -47,6 +49,13 @@ router.patch(
   '/:id/attendance',
   [validateJWT, hasRole('EMPLOYEE', 'BRANCH_ADMIN', 'PLATFORM_ADMIN')],
   toggleEventAttendance
+);
+
+router.post(
+  '/',
+  validateJWT,
+  validateCreateEvent,
+  createEvent
 );
 
 export default router;

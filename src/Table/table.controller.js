@@ -4,31 +4,50 @@ import Table from './table.model.js';
 
 /* -----------------------------------------
    CREAR MESA (ADMIN)
-   - PLATFORM_ADMIN: puede crear mesas para cualquier sucursal
 ------------------------------------------*/
 export const saveTable = async (req, res) => {
     try {
-        if (req.user.role !== 'PLATFORM_ADMIN') {
-            return res.status(403).json({ success: false, message: 'No autorizado' });
+        if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(req.user.role)) {
+        return res.status(403).json({ success: false, message: 'No autorizado' });
         }
 
-        const data = req.body;
-        const table = new Table(data);
-        await table.save();
+        const data = { ...req.body };
+
+        // BRANCH_ADMIN solo en su sucursal
+        if (req.user.role === 'BRANCH_ADMIN') {
+        if (!req.user.branchId) {
+            return res.status(400).json({
+            success: false,
+            message: 'El usuario no tiene branchId asignado'
+            });
+        }
+        data.branchId = req.user.branchId;
+        }
+
+        const table = await Table.create(data);
 
         return res.status(201).json({
-            success: true,
-            message: 'Mesa registrada',
-            table
+        success: true,
+        message: 'Mesa registrada',
+        table
         });
+
     } catch (err) {
-        return res.status(500).json({
+        // Error típico por índice compuesto duplicado
+        if (err.code === 11000) {
+        return res.status(400).json({
             success: false,
-            message: 'Error al registrar mesa',
-            err: err.message
+            message: 'Ya existe esa mesa en esta sucursal (numberTable duplicado)'
+        });
+        }
+
+        return res.status(500).json({
+        success: false,
+        message: 'Error al registrar mesa',
+        err: err.message
         });
     }
-};
+    };
 
 /* -----------------------------------------
    OBTENER MESAS (ADMIN)

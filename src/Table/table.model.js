@@ -10,14 +10,13 @@ const tableSchema = Schema({
     },
     numberTable: {
         type: Number,
-        required: [true, 'El número de mesa es obligatorio'],
-        unique: true
+        required: [true, 'El número de mesa es obligatorio']
+        // NO unique aquí
     },
     capacity: {
         type: Number,
         required: [true, 'La capacidad es obligatoria']
     },
-    // Estandarizamos para el Soft Delete
     TableStatus: {
         type: String,
         enum: ['ACTIVE', 'INACTIVE'],
@@ -27,7 +26,6 @@ const tableSchema = Schema({
         type: [Number],
         default: [0, 0]
     },
-    // Para uso de negocio (opcional, pero lo mantenemos si lo necesitas)
     availability: {
         type: String,
         enum: ['Disponible', 'Ocupada', 'Mantenimiento'],
@@ -38,5 +36,8 @@ const tableSchema = Schema({
         default: null
     }
 }, { versionKey: false, timestamps: true });
+
+// Número de Mesa único por sucursal
+tableSchema.index({ branchId: 1, numberTable: 1 }, { unique: true });
 
 export default model('Table', tableSchema);
