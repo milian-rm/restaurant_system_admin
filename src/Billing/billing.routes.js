@@ -12,18 +12,25 @@ import { hasRole } from '../../middlewares/role-validator.js';
 
 const router = Router();
 
-// --- RUTAS PROTEGIDAS POR JWT ---
+router.get('/', [validateJWT, 
+    hasRole('PLATFORM_ADMIN','BRANCH_ADMIN','EMPLOYEE')], 
+    getBillings
+);
 
-// Obtener todas las facturas (Admin/Empleado ve todas, Customer solo las suyas)
-router.get('/', validateJWT, getBillings);
+router.get('/:id', [validateJWT, 
+    hasRole('PLATFORM_ADMIN','BRANCH_ADMIN','EMPLOYEE')], 
+    getBillingById
+);
 
-// Obtener una factura específica
-router.get('/:id', validateJWT, getBillingById);
 
-// Crear factura (Solo clientes o empleados)
-router.post('/', [validateJWT, hasRole('BRANCH_ADMIN', 'EMPLOYEE', 'PLATFORM_ADMIN')], createBilling);
+router.post('/', [validateJWT, 
+    hasRole('PLATFORM_ADMIN','BRANCH_ADMIN','EMPLOYEE')], 
+    createBilling
+);
 
-// Pagar y finalizar ciclo (Solo empleados/admin usualmente procesan el pago)
-router.patch('/pay/:id', [validateJWT, hasRole('EMPLOYEE', 'BRANCH_ADMIN','PLATFORM_ADMIN')], payBilling);
+router.patch('/pay/:id', [validateJWT, 
+    hasRole('PLATFORM_ADMIN','BRANCH_ADMIN','EMPLOYEE')], 
+    payBilling
+);
 
 export default router;

@@ -5,7 +5,7 @@ import OrderDetail from '../OrderDetail/orderDetail.model.js';
 import Table from '../Table/table.model.js';
 import Coupon from '../Coupon/coupon.model.js';
 
-// Obtener todas las Ordenes
+// Obtener todas las Ordenes (ADMIN)
 export const getOrders = async (req, res) => {
     try {
         const { page = 1, limit = 10, estado } = req.query;
@@ -13,10 +13,18 @@ export const getOrders = async (req, res) => {
         const filter = {};
         if (estado) filter.estado = estado;
 
+        // Scope por sucursal
+        if (['BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
+            if (!req.user.branchId) {
+                return res.status(400).json({ success: false, message: 'Usuario sin branchId asignado' });
+            }
+            filter.branchId = req.user.branchId;
+        }
+
         const orders = await Order.find(filter)
-            .populate('mesaId', 'numero capacidad')
-            .populate('empleadoId', 'name surname')
-            .populate('branchId', 'name')
+            .populate('mesaId', 'numberTable capacity') // ✅ nombres correctos
+            .populate('empleadoId', 'UserName UserSurname UserEmail role') // ✅ nombres correctos
+            .populate('branchId', 'name zone')
             .limit(parseInt(limit))
             .skip((parseInt(page) - 1) * parseInt(limit))
             .sort({ createdAt: -1 });
@@ -28,7 +36,7 @@ export const getOrders = async (req, res) => {
             data: orders,
             pagination: {
                 currentPage: parseInt(page),
-                totalPages: Math.ceil(total / limit),
+                totalPages: Math.ceil(total / parseInt(limit)),
                 totalRecords: total,
                 limit: parseInt(limit)
             }
@@ -43,21 +51,31 @@ export const getOrders = async (req, res) => {
     }
 };
 
-// Obtener una Orden por ID
+// Obtener una Orden por ID (ADMIN)
 export const getOrderById = async (req, res) => {
     try {
         const { id } = req.params;
 
         const order = await Order.findById(id)
-            .populate('mesaId')
-            .populate('empleadoId')
-            .populate('branchId');
+            .populate('mesaId', 'numberTable capacity availability')
+            .populate('empleadoId', 'UserName UserSurname UserEmail role branchId')
+            .populate('branchId', 'name zone');
 
         if (!order) {
             return res.status(404).json({
                 success: false,
                 message: 'Orden no encontrada'
             });
+        }
+
+        // Scope por sucursal
+        if (['BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
+            if (!req.user.branchId) {
+                return res.status(400).json({ success: false, message: 'Usuario sin branchId asignado' });
+            }
+            if (order.branchId?.toString() !== req.user.branchId.toString()) {
+                return res.status(403).json({ success: false, message: 'No autorizado' });
+            }
         }
 
         const items = await OrderDetail.find({ order: id })
@@ -79,88 +97,72 @@ export const getOrderById = async (req, res) => {
     }
 };
 
-// Crear Orden
+// Crear Orden (ADMIN)
+// Nota: En ADMIN-API normalmente solo se crea DINE_IN (en mesa).
 export const createOrder = async (req, res) => {
     try {
-
-        const {
-            branchId,
-            mesaId,
-            orderType
-        } = req.body;
+        const { branchId, mesaId, orderType, couponCode } = req.body;
 
         const userRole = req.user.role;
-        const empleadoId = ['EMPLOYEE', 'BRANCH_ADMIN', 'PLATFORM_ADMIN'].includes(userRole) 
-            ? req.user._id 
-            : null;
 
-        //Validar tipo de Orden
+        // Solo roles admin/personal (esto lo refuerza el router, pero aquí también queda)
+        if (!['EMPLOYEE', 'BRANCH_ADMIN', 'PLATFORM_ADMIN'].includes(userRole)) {
+            return res.status(403).json({ success: false, message: 'No autorizado' });
+        }
+
+        // En tu schema: DINE_IN, TAKEAWAY, DELIVERY
         if (!orderType) {
-            return res.status(400).json({
-                success: false,
-                message: 'orderType es obligatorio'
-            });
+            return res.status(400).json({ success: false, message: 'orderType es obligatorio' });
         }
 
-        /* ===============================
-           RBAC — REGLAS DE NEGOCIO
-        =============================== */
+        // Scope branchId:
+        // - PLATFORM_ADMIN puede usar branchId del body
+        // - BRANCH_ADMIN/EMPLOYEE usan su req.user.branchId
+        let finalBranchId = branchId;
 
-        if (orderType === 'DINE_IN' && !['EMPLOYEE', 'BRANCH_ADMIN', 'PLATFORM_ADMIN'].includes(userRole)) {
-            return res.status(403).json({
-                success: false,
-                message: 'No tienes permisos para crear órdenes en mesa'
-            });
+        if (['BRANCH_ADMIN', 'EMPLOYEE'].includes(userRole)) {
+            if (!req.user.branchId) {
+                return res.status(400).json({ success: false, message: 'Usuario sin branchId asignado' });
+            }
+            finalBranchId = req.user.branchId;
         }
 
-        // SOLO clientes crean DELIVERY o PICKUP
-        if (
-            (orderType === 'DELIVERY' || orderType === 'PICKUP') &&
-            userRole !== 'CLIENT'
-        ) {
-            return res.status(403).json({
-                success: false,
-                message: 'Solo clientes pueden crear órdenes DELIVERY o PICKUP'
-            });
+        if (!finalBranchId) {
+            return res.status(400).json({ success: false, message: 'branchId es obligatorio' });
         }
 
+        // ADMIN-API: si quieres que personal cree TAKEAWAY/DELIVERY, lo permitimos.
+        // Si NO lo quieres, cambia a: if (orderType !== 'DINE_IN') return 400;
         let table = null;
 
         // Validar Mesa para Comer Aquí
         if (orderType === 'DINE_IN') {
-
             if (!mesaId) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'mesaId es obligatorio para DINE_IN'
-                });
+                return res.status(400).json({ success: false, message: 'mesaId es obligatorio para DINE_IN' });
             }
 
             table = await Table.findById(mesaId);
-
             if (!table) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Mesa no encontrada'
-                });
+                return res.status(404).json({ success: false, message: 'Mesa no encontrada' });
+            }
+
+            // Scope por sucursal: la mesa debe pertenecer al branch
+            if (table.branchId.toString() !== finalBranchId.toString()) {
+                return res.status(403).json({ success: false, message: 'Mesa no pertenece a tu sucursal' });
             }
 
             if (table.availability !== 'Disponible') {
-                return res.status(400).json({
-                    success: false,
-                    message: 'La mesa no está disponible'
-                });
+                return res.status(400).json({ success: false, message: 'La mesa no está disponible' });
             }
         }
 
-        const { couponCode } = req.body; 
+        // Cupón (opcional)
         let appliedCouponId = null;
 
         if (couponCode) {
-            // Importar Coupon arriba en el archivo es mejor: import Coupon from '../Coupon/coupon.model.js';
-            const couponDB = await Coupon.findOne({ 
-                code: couponCode.toUpperCase(), 
-                status: 'ACTIVE' 
+            const couponDB = await Coupon.findOne({
+                code: couponCode.toUpperCase(),
+                status: 'ACTIVE'
             });
 
             if (!couponDB) {
@@ -176,11 +178,12 @@ export const createOrder = async (req, res) => {
             }
 
             appliedCouponId = couponDB._id;
-            // Nota: El descuento real se aplicará cuando se calculen los OrderDetails
         }
 
+        const empleadoId = req.user._id;
+
         const order = await Order.create({
-            branchId,
+            branchId: finalBranchId,
             mesaId: orderType === 'DINE_IN' ? mesaId : null,
             empleadoId,
             orderType,
@@ -189,7 +192,6 @@ export const createOrder = async (req, res) => {
             estado: 'Pendiente'
         });
 
-        // IMPORTANTE: Incrementar el uso del cupón si se aplicó
         if (appliedCouponId) {
             await Coupon.findByIdAndUpdate(appliedCouponId, { $inc: { usedCount: 1 } });
         }
@@ -215,36 +217,46 @@ export const createOrder = async (req, res) => {
     }
 };
 
-// Actualizar Orden
+// Actualizar Orden (ADMIN)
 export const updateOrder = async (req, res) => {
     try {
         const { id } = req.params;
         const userRole = req.user.role;
 
         if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN', 'EMPLOYEE'].includes(userRole)) {
-            return res.status(403).json({
-                success: false,
-                message: 'No autorizado para editar órdenes'
-            });
+            return res.status(403).json({ success: false, message: 'No autorizado para editar órdenes' });
+        }
+
+        // Scope por sucursal: BRANCH_ADMIN/EMPLOYEE solo su branch
+        if (['BRANCH_ADMIN', 'EMPLOYEE'].includes(userRole)) {
+            const existing = await Order.findById(id);
+            if (!existing) return res.status(404).json({ success: false, message: 'Orden no encontrada' });
+
+            if (!req.user.branchId) {
+                return res.status(400).json({ success: false, message: 'Usuario sin branchId asignado' });
+            }
+
+            if (existing.branchId.toString() !== req.user.branchId.toString()) {
+                return res.status(403).json({ success: false, message: 'No autorizado' });
+            }
+
+            // Evita que cambien la sucursal
+            if (req.body.branchId && req.body.branchId.toString() !== req.user.branchId.toString()) {
+                return res.status(403).json({ success: false, message: 'No puedes cambiar branchId' });
+            }
         }
 
         const order = await Order.findByIdAndUpdate(
             id,
             req.body,
-            {
-                new: true,
-                runValidators: true
-            }
+            { new: true, runValidators: true }
         )
-            .populate('mesaId')
-            .populate('empleadoId')
-            .populate('branchId');
+            .populate('mesaId', 'numberTable capacity')
+            .populate('empleadoId', 'UserName UserSurname')
+            .populate('branchId', 'name');
 
         if (!order) {
-            return res.status(404).json({
-                success: false,
-                message: 'Orden no encontrada'
-            });
+            return res.status(404).json({ success: false, message: 'Orden no encontrada' });
         }
 
         res.status(200).json({
@@ -262,30 +274,35 @@ export const updateOrder = async (req, res) => {
     }
 };
 
-// Cambiar estado de Orden
+// Cambiar estado de Orden (ADMIN)
 export const changeOrderStatus = async (req, res) => {
     try {
-
         const { id } = req.params;
         const { estado } = req.body;
 
-        const order = await Order.findById(id);
+        if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
+            return res.status(403).json({ success: false, message: 'No autorizado' });
+        }
 
+        const order = await Order.findById(id);
         if (!order) {
-            return res.status(404).json({
-                success: false,
-                message: 'Orden no encontrada'
-            });
+            return res.status(404).json({ success: false, message: 'Orden no encontrada' });
+        }
+
+        // Scope por sucursal
+        if (['BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
+            if (!req.user.branchId) {
+                return res.status(400).json({ success: false, message: 'Usuario sin branchId asignado' });
+            }
+            if (order.branchId.toString() !== req.user.branchId.toString()) {
+                return res.status(403).json({ success: false, message: 'No autorizado' });
+            }
         }
 
         order.estado = estado;
         await order.save();
 
-        // Liberar Mesa
-        if (
-            (estado === 'Finalizada' || estado === 'Cancelado') &&
-            order.mesaId
-        ) {
+        if ((estado === 'Entregado' || estado === 'Cancelado') && order.mesaId) {
             const table = await Table.findById(order.mesaId);
             if (table) {
                 table.availability = 'Disponible';

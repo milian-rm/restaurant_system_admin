@@ -2,43 +2,80 @@
 
 import Table from './table.model.js';
 
-// SOLO PLATFORM_ADMIN
+/* -----------------------------------------
+   CREAR MESA (ADMIN)
+   - PLATFORM_ADMIN: puede crear mesas para cualquier sucursal
+------------------------------------------*/
 export const saveTable = async (req, res) => {
     try {
         if (req.user.role !== 'PLATFORM_ADMIN') {
-            return res.status(403).json({ success: false, message: 'No autorizado' })
+            return res.status(403).json({ success: false, message: 'No autorizado' });
         }
 
         const data = req.body;
         const table = new Table(data);
         await table.save();
-        return res.status(201).send({ success: true, message: 'Mesa registrada', table });
+
+        return res.status(201).json({
+            success: true,
+            message: 'Mesa registrada',
+            table
+        });
     } catch (err) {
-        return res.status(500).send({ success: false, message: 'Error al registrar mesa', err: err.message });
+        return res.status(500).json({
+            success: false,
+            message: 'Error al registrar mesa',
+            err: err.message
+        });
     }
 };
 
-//Todos pueden ver todas las mesa
+/* -----------------------------------------
+   OBTENER MESAS (ADMIN)
+   - EMPLOYEE / BRANCH_ADMIN: solo ve mesas de su sucursal
+   - PLATFORM_ADMIN: ve todas las mesas
+   - (En admin-api no se contempla CLIENT)
+   - Soporta query TableStatus para filtrar (opcional)
+------------------------------------------*/
 export const getTables = async (req, res) => {
     try {
         const filter = {};
 
-        if (req.user.role === 'CLIENT') {
-            filter.TableStatus = 'ACTIVE';
-        } else {
-            if (req.query.TableStatus) {
-                filter.TableStatus = req.query.TableStatus;
+        // Restricción por sucursal para personal de sucursal
+        if (['EMPLOYEE', 'BRANCH_ADMIN'].includes(req.user.role)) {
+            if (!req.user.branchId) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'El usuario no tiene branchId asignado'
+                });
             }
+            filter.branchId = req.user.branchId;
         }
 
-        const tables = await Table.find(filter).populate('branchId', 'nombre');
-        return res.send({ success: true, tables });
+        if (req.query.TableStatus) {
+            filter.TableStatus = req.query.TableStatus;
+        }
+
+        const tables = await Table.find(filter).populate('branchId', 'name');
+
+        return res.json({
+            success: true,
+            tables
+        });
     } catch (err) {
-        return res.status(500).send({ success: false, message: 'Error al obtener mesas' });
+        return res.status(500).json({
+            success: false,
+            message: 'Error al obtener mesas',
+            err: err.message
+        });
     }
 };
 
-// PLATFORM_ADMIN Y BRANCH_ADMIN
+/* -----------------------------------------
+   ACTUALIZAR MESA (ADMIN)
+   - PLATFORM_ADMIN: puede actualizar cualquier mesa
+   - BRANCH_ADMIN: solo puede actualizar mesas de su sucursal
+------------------------------------------*/
 export const updateTable = async (req, res) => {
     try {
         if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(req.user.role)) {
@@ -47,15 +84,49 @@ export const updateTable = async (req, res) => {
 
         const { id } = req.params;
         const data = req.body;
-        const updated = await Table.findByIdAndUpdate(id, data, { new: true });
-        if (!updated) return res.status(404).send({ success: false, message: 'Mesa no encontrada' });
-        return res.send({ success: true, message: 'Mesa actualizada', updated });
+
+        const table = await Table.findById(id);
+        if (!table) {
+            return res.status(404).json({ success: false, message: 'Mesa no encontrada' });
+        }
+
+        // BRANCH_ADMIN solo puede modificar mesas de su sucursal
+        if (req.user.role === 'BRANCH_ADMIN') {
+            if (!req.user.branchId) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'El usuario no tiene branchId asignado'
+                });
+            }
+            if (table.branchId?.toString() !== req.user.branchId.toString()) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'No autorizado para modificar mesas de otra sucursal'
+                });
+            }
+        }
+
+        const updated = await Table.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+
+        return res.json({
+            success: true,
+            message: 'Mesa actualizada',
+            updated
+        });
     } catch (err) {
-        return res.status(500).send({ success: false, message: 'Error al actualizar', err: err.message });
+        return res.status(500).json({
+            success: false,
+            message: 'Error al actualizar',
+            err: err.message
+        });
     }
 };
 
-//PLATFORM_ADMIN, BRANCH_ADMIN Y EMPLOYEE
+/* -----------------------------------------
+   CAMBIAR ESTADO (SOFT DELETE) (ADMIN)
+   - PLATFORM_ADMIN: puede cambiar estado de cualquier mesa
+   - BRANCH_ADMIN / EMPLOYEE: solo mesas de su sucursal
+------------------------------------------*/
 export const changeTableStatus = async (req, res) => {
     try {
         if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
@@ -63,22 +134,43 @@ export const changeTableStatus = async (req, res) => {
         }
 
         const { id } = req.params;
+
         const table = await Table.findById(id);
+        if (!table) {
+            return res.status(404).json({ success: false, message: 'Mesa no encontrada' });
+        }
 
-        if (!table) return res.status(404).send({ success: false, message: 'Mesa no encontrada' });
+        // Personal de sucursal solo puede cambiar estado de su sucursal
+        if (['BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
+            if (!req.user.branchId) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'El usuario no tiene branchId asignado'
+                });
+            }
+            if (table.branchId?.toString() !== req.user.branchId.toString()) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'No autorizado para cambiar estado de mesas de otra sucursal'
+                });
+            }
+        }
 
-        // Lógica de Soft Delete igual a las otras entidades
         table.TableStatus = table.TableStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
         table.deletedAt = table.TableStatus === 'INACTIVE' ? new Date() : null;
 
         await table.save();
 
-        return res.send({
+        return res.json({
             success: true,
             message: `Estado de mesa cambiado a ${table.TableStatus}`,
             table
         });
     } catch (err) {
-        return res.status(500).send({ success: false, message: 'Error al cambiar estado', err: err.message });
+        return res.status(500).json({
+            success: false,
+            message: 'Error al cambiar estado',
+            err: err.message
+        });
     }
 };

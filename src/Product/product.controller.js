@@ -5,9 +5,8 @@ import Inventory from '../Inventory/inventory.model.js';
 import Branch from '../Branch/branch.model.js';
 import mongoose from 'mongoose';
 
-//Actualizar promedio de precio por sucursal
+// Recalcula el promedio de precios de productos ACTIVE por sucursal
 const updatedBranchAverage = async (branchId) => {
-
     const result = await Product.aggregate([
         {
             $match: {
@@ -30,24 +29,29 @@ const updatedBranchAverage = async (branchId) => {
     });
 };
 
-// Obtener productos
+// Obtener productos (con filtros y paginación)
 export const getProducts = async (req, res) => {
     try {
         const { page = 1, limit = 10, categoria, estado, ProductStatus } = req.query;
         const filter = {};
 
-        // Mantenemos los filtros originales y agregamos el de Soft Delete
+        // Filtros opcionales
         if (categoria) filter.categoria = categoria;
         if (estado) filter.estado = estado;
-        // Si no mandan un status específico, solo mostramos los ACTIVE
-        if (req.user.role === 'CLIENT') {
+
+        // Visibilidad por rol
+        if (req.user.role === 'CLIENT' || req.user.role === 'EMPLOYEE') {
+            // Cliente y empleado solo ven productos activos
             filter.ProductStatus = 'ACTIVE';
+        } else {
+            // Admins pueden filtrar por status si lo envían
+            if (ProductStatus) filter.ProductStatus = ProductStatus;
         }
 
         const products = await Product.find(filter)
             .populate('ingredientes.inventoryId', 'name stock unitCost')
-            .limit(limit * 1)
-            .skip((page - 1) * limit)
+            .limit(parseInt(limit))
+            .skip((parseInt(page) - 1) * parseInt(limit))
             .sort({ nombre: 1 });
 
         const total = await Product.countDocuments(filter);
@@ -57,7 +61,7 @@ export const getProducts = async (req, res) => {
             data: products,
             pagination: {
                 currentPage: parseInt(page),
-                totalPages: Math.ceil(total / limit),
+                totalPages: Math.ceil(total / parseInt(limit)),
                 totalRecords: total
             }
         });
@@ -66,6 +70,7 @@ export const getProducts = async (req, res) => {
     }
 };
 
+// Crear producto (solo PLATFORM_ADMIN y BRANCH_ADMIN)
 export const createProduct = async (req, res) => {
     try {
         if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(req.user.role)) {
@@ -74,17 +79,15 @@ export const createProduct = async (req, res) => {
 
         const data = req.body;
 
-        // Valida que el arreglo de ingredientes exista
-
+        // Validación: ingredientes obligatorios
         if (!data.ingredientes || !Array.isArray(data.ingredientes) || data.ingredientes.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Un producto de KFC debe tener al menos un ingrediente del inventario'
+                message: 'El producto debe tener al menos un ingrediente del inventario'
             });
         }
 
-        // valida que cada ingrediente exista en la base de datos
-
+        // Validación: cada ingrediente debe existir
         for (const item of data.ingredientes) {
             const inventoryExists = await Inventory.findById(item.inventoryId);
             if (!inventoryExists) {
@@ -95,14 +98,15 @@ export const createProduct = async (req, res) => {
             }
         }
 
-        // Si Cloudinary subió el archivo, asignamos la URL segura al modelo
-
+        // Imagen (Cloudinary)
         if (req.file) {
             data.imagen_url = req.file.path;
         }
 
         const product = new Product(data);
         await product.save();
+
+        // Recalcular promedio por sucursal
         for (const branch of product.Branches) {
             await updatedBranchAverage(branch.BranchId);
         }
@@ -113,6 +117,7 @@ export const createProduct = async (req, res) => {
     }
 };
 
+// Actualizar producto (solo PLATFORM_ADMIN y BRANCH_ADMIN)
 export const updatedProduct = async (req, res) => {
     try {
         if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(req.user.role)) {
@@ -122,8 +127,7 @@ export const updatedProduct = async (req, res) => {
         const { id } = req.params;
         const data = req.body;
 
-        // valida que los nuevos ID existan en el inventario
-
+        // Validación: si vienen ingredientes, deben existir
         if (data.ingredientes && Array.isArray(data.ingredientes)) {
             for (const item of data.ingredientes) {
                 const inventoryExists = await Inventory.findById(item.inventoryId);
@@ -136,31 +140,32 @@ export const updatedProduct = async (req, res) => {
             }
         }
 
+        // Imagen (Cloudinary)
         if (req.file) {
             data.imagen_url = req.file.path;
         }
 
-        // runValidators asegura que Mongoose valide el arreglo aunque sea una actualización
-        const updatedProduct = await Product.findByIdAndUpdate(id, data, {
+        const updated = await Product.findByIdAndUpdate(id, data, {
             new: true,
             runValidators: true
         }).populate('ingredientes.inventoryId', 'name stock');
 
-        if (!updatedProduct) {
+        if (!updated) {
             return res.status(404).json({ success: false, message: 'Producto no encontrado' });
         }
 
-        for (const branch of updatedProduct.Branches) {
+        // Recalcular promedio por sucursal
+        for (const branch of updated.Branches) {
             await updatedBranchAverage(branch.BranchId);
         }
 
-        res.status(200).json({ success: true, data: updatedProduct });
+        res.status(200).json({ success: true, data: updated });
     } catch (error) {
         res.status(400).json({ success: false, error: error.message });
     }
 };
 
-// NUEVA FUNCIÓN PARA SOFT DELETE
+// Soft delete (toggle ACTIVE/INACTIVE) (solo PLATFORM_ADMIN y BRANCH_ADMIN)
 export const changeProductStatus = async (req, res) => {
     try {
         if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(req.user.role)) {
@@ -174,12 +179,12 @@ export const changeProductStatus = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Producto no encontrado' });
         }
 
-        // Alternar entre ACTIVE e INACTIVE
         product.ProductStatus = product.ProductStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
         product.deletedAt = product.ProductStatus === 'INACTIVE' ? new Date() : null;
 
         await product.save();
 
+        // Recalcular promedio por sucursal
         for (const branch of product.Branches) {
             await updatedBranchAverage(branch.BranchId);
         }

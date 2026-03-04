@@ -6,199 +6,325 @@ import Product from '../Product/product.model.js';
 import Combo from '../Combo/combo.model.js';
 import Inventory from '../Inventory/inventory.model.js';
 
-export const createOrderDetail = async (req, res) => {
-    try {
-        if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
-            return res.status(403).json({ success: false, message: 'No autorizado' });
-        }
 
-        const { order, productoId, comboId, cantidad } = req.body;
+const buildInventoryNeeds = async ({ productoId, comboId, qty }) => {
+  const needs = new Map();
+  let unitPrice = 0;
+  const resolved = {};
 
-        const existingOrder = await Order.findById(order);
-        if (!existingOrder) {
-            return res.status(404).json({ success: false, message: 'Orden no encontrada' });
-        }
-
-        let precio;
-
-        if (productoId) {
-            const product = await Product.findById(productoId).populate('ingredientes.inventoryId');
-            if (!product) {
-                return res.status(404).json({ success: false, message: 'Producto no encontrado' });
-            }
-            precio = product.precio;
-
-            for (const ingrediente of product.ingredientes) {
-                const inventoryItem = ingrediente.inventoryId; 
-                const cantidadNecesaria = ingrediente.cantidadUsada * cantidad;
-
-                if (!inventoryItem || inventoryItem.stock < cantidadNecesaria) {
-                    return res.status(400).json({
-                        success: false,
-                        message: `Stock insuficiente para: ${inventoryItem ? inventoryItem.name : 'Insumo desconocido'}. Requerido: ${cantidadNecesaria}, Disponible: ${inventoryItem ? inventoryItem.stock : 0}`
-                    });
-                }
-            }
-
-            for (const ingrediente of product.ingredientes) {
-                const cantidadNecesaria = ingrediente.cantidadUsada * cantidad;
-
-                await Inventory.findByIdAndUpdate(
-                    ingrediente.inventoryId._id,
-                    { $inc: { stock: -cantidadNecesaria } }
-                );
-            }
-        }
-
-        if (comboId) {
-            const combo = await Combo.findById(comboId);
-            if (!combo) {
-                return res.status(404).json({ success: false, message: 'Combo no encontrado' });
-            }
-            precio = combo.ComboPrice;
-        }
-
-        const subtotal = precio * cantidad;
-
-        const detail = await OrderDetail.create({
-            order,
-            productoId,
-            comboId,
-            cantidad,
-            precio,
-            subtotal
-        });
-
-        await Order.findByIdAndUpdate(order, {
-            $inc: { total: subtotal }
-        });
-
-        res.status(201).json({
-            success: true,
-            message: 'Item creado y stock descontado',
-            data: detail
-        });
-
-    } catch (error) {
-        res.status(400).json({ success: false, message: 'Error al crear item', error: error.message });
+  if (productoId) {
+    const product = await Product.findById(productoId).populate('ingredientes.inventoryId');
+    if (!product) {
+      const err = new Error('Producto no encontrado');
+      err.status = 404;
+      throw err;
     }
-};
+    resolved.product = product;
 
-export const getOrderDetailsByOrder = async (req, res) => {
-    try {
-        const { orderId } = req.params;
+    unitPrice = Number(product.precio || 0);
 
-        if (req.user.role === 'CLIENT') {
-            if (order.clientId?.toString() !== req.user._id.toString()) {
-                return res.status(403).json({ success: false, message: 'No autorizado' });
-            }
-        } else if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
-            return res.status(403).json({ success: false, message: 'No autorizado' });
-        }
-
-
-        const details = await OrderDetail.find({ order: orderId })
-            .populate('productoId')
-            .populate('comboId')
-            .sort({ createdAt: 1 });
-
-        res.status(200).json({
-            success: true,
-            data: details
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Error al obtener items',
-            error: error.message
-        });
+    for (const ing of product.ingredientes || []) {
+      const inv = ing.inventoryId;
+      const invId = inv?._id?.toString();
+      if (!invId) {
+        const err = new Error('Ingrediente inválido: inventoryId faltante');
+        err.status = 400;
+        throw err;
+      }
+      const need = Number(ing.cantidadUsada || 0) * qty;
+      needs.set(invId, (needs.get(invId) || 0) + need);
     }
-};
+  }
 
-
-export const updateOrderDetail = async (req, res) => {
-    try {
-        if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
-            return res.status(403).json({ success: false, message: 'No autorizado' });
-        }
-
-        const { id } = req.params;
-
-        const detail = await OrderDetail.findById(id);
-        if (!detail) {
-            return res.status(404).json({
-                success: false,
-                message: 'Item no encontrado'
-            });
-        }
-
-        const nuevaCantidad = req.body.cantidad ?? detail.cantidad;
-
-        const nuevoSubtotal = nuevaCantidad * detail.precio;
-        const diferencia = nuevoSubtotal - detail.subtotal;
-
-        detail.set({
-            cantidad: nuevaCantidad,
-            subtotal: nuevoSubtotal
-        });
-
-        await detail.save();
-
-        await Order.findByIdAndUpdate(detail.order, {
-            $inc: { total: diferencia }
-        });
-
-        res.status(200).json({
-            success: true,
-            message: 'Item actualizado',
-            data: detail
-        });
-
-    } catch (error) {
-        res.status(400).json({
-            success: false,
-            message: 'Error al actualizar item',
-            error: error.message
-        });
+  if (comboId) {
+    const combo = await Combo.findById(comboId);
+    if (!combo) {
+      const err = new Error('Combo no encontrado');
+      err.status = 404;
+      throw err;
     }
+    resolved.combo = combo;
+
+    const comboPrice = Number(combo.ComboPrice || 0);
+    const comboDiscount = Number(combo.ComboDiscount || 0);
+    unitPrice = Math.max(comboPrice - comboDiscount, 0);
+
+    if (!Array.isArray(combo.ComboList) || combo.ComboList.length === 0) {
+      const err = new Error('El combo no tiene productos asociados (ComboList vacío)');
+      err.status = 400;
+      throw err;
+    }
+
+    const productIds = combo.ComboList.map(i => i.productId);
+    const products = await Product.find({ _id: { $in: productIds } }).populate('ingredientes.inventoryId');
+    const productsMap = new Map(products.map(p => [p._id.toString(), p]));
+
+    // Validar que existan todos los productos del combo
+    for (const item of combo.ComboList) {
+      const p = productsMap.get(item.productId.toString());
+      if (!p) {
+        const err = new Error(`Producto del combo no encontrado: ${item.productId}`);
+        err.status = 404;
+        throw err;
+      }
+    }
+
+    // Acumular requerimientos por inventario
+    for (const comboItem of combo.ComboList) {
+      const product = productsMap.get(comboItem.productId.toString());
+      const comboItemQty = Number(comboItem.cantidad || 1);
+      const totalProductUnits = comboItemQty * qty;
+
+      for (const ing of product.ingredientes || []) {
+        const inv = ing.inventoryId;
+        const invId = inv?._id?.toString();
+        if (!invId) {
+          const err = new Error(`Producto ${product.nombre} tiene un ingrediente inválido (inventoryId faltante)`);
+          err.status = 400;
+          throw err;
+        }
+        const need = Number(ing.cantidadUsada || 0) * totalProductUnits;
+        needs.set(invId, (needs.get(invId) || 0) + need);
+      }
+    }
+  }
+
+  return { needs, unitPrice, resolved };
 };
 
 /**
- * Eliminar item
+ * Utilidad: valida stock suficiente para un mapa inventoryId -> cantidad
+ */
+const validateStock = async (needs) => {
+  for (const [invId, needed] of needs.entries()) {
+    const inv = await Inventory.findById(invId);
+    if (!inv) {
+      const err = new Error(`Insumo no encontrado: ${invId}`);
+      err.status = 404;
+      throw err;
+    }
+    if (Number(inv.stock) < Number(needed)) {
+      const err = new Error(`Stock insuficiente para: ${inv.name}. Requerido: ${needed}, Disponible: ${inv.stock}`);
+      err.status = 400;
+      throw err;
+    }
+  }
+};
+
+const applyInventoryDelta = async (needs, sign) => {
+  for (const [invId, amount] of needs.entries()) {
+    await Inventory.findByIdAndUpdate(invId, { $inc: { stock: sign * Number(amount) } });
+  }
+};
+
+export const createOrderDetail = async (req, res) => {
+  try {
+    if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: 'No autorizado' });
+    }
+
+    const { order, productoId, comboId, cantidad } = req.body;
+
+    if (!order) return res.status(400).json({ success: false, message: 'order es requerido' });
+
+    const qty = Number(cantidad);
+    if (!qty || qty < 1) {
+      return res.status(400).json({ success: false, message: 'cantidad debe ser >= 1' });
+    }
+
+    const hasProduct = Boolean(productoId);
+    const hasCombo = Boolean(comboId);
+    if ((hasProduct && hasCombo) || (!hasProduct && !hasCombo)) {
+      return res.status(400).json({ success: false, message: 'Debe enviar productoId o comboId (solo uno)' });
+    }
+
+    const existingOrder = await Order.findById(order);
+    if (!existingOrder) {
+      return res.status(404).json({ success: false, message: 'Orden no encontrada' });
+    }
+
+    const { needs, unitPrice } = await buildInventoryNeeds({ productoId, comboId, qty });
+
+    await validateStock(needs);
+    await applyInventoryDelta(needs, -1);
+
+    const subtotal = unitPrice * qty;
+
+    const detail = await OrderDetail.create({
+      order,
+      productoId: productoId || null,
+      comboId: comboId || null,
+      cantidad: qty,
+      precio: unitPrice,
+      subtotal
+    });
+
+    await Order.findByIdAndUpdate(order, { $inc: { total: subtotal } });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Item creado y stock actualizado',
+      data: detail
+    });
+  } catch (error) {
+    return res.status(error.status || 400).json({
+      success: false,
+      message: 'Error al crear item',
+      error: error.message
+    });
+  }
+};
+
+export const getOrderDetailsByOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: 'No autorizado' });
+    }
+
+    const details = await OrderDetail.find({ order: orderId })
+      .populate('productoId')
+      .populate('comboId')
+      .sort({ createdAt: 1 });
+
+    return res.status(200).json({ success: true, data: details });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error al obtener items',
+      error: error.message
+    });
+  }
+};
+
+export const updateOrderDetail = async (req, res) => {
+  try {
+    if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: 'No autorizado' });
+    }
+
+    const { id } = req.params;
+    const { cantidad, productoId, comboId } = req.body;
+
+    const detail = await OrderDetail.findById(id);
+    if (!detail) {
+      return res.status(404).json({ success: false, message: 'Item no encontrado' });
+    }
+
+    // Datos actuales
+    const oldQty = Number(detail.cantidad);
+    const oldProductoId = detail.productoId ? detail.productoId.toString() : null;
+    const oldComboId = detail.comboId ? detail.comboId.toString() : null;
+
+    // Nuevos datos (si no vienen, se mantienen)
+    const newQty = cantidad !== undefined ? Number(cantidad) : oldQty;
+    if (!newQty || newQty < 1) {
+      return res.status(400).json({ success: false, message: 'cantidad debe ser >= 1' });
+    }
+
+    const newProductoId = productoId !== undefined ? (productoId || null) : oldProductoId;
+    const newComboId = comboId !== undefined ? (comboId || null) : oldComboId;
+
+    // Validación: debe existir exactamente uno (producto o combo)
+    const hasProduct = Boolean(newProductoId);
+    const hasCombo = Boolean(newComboId);
+    if ((hasProduct && hasCombo) || (!hasProduct && !hasCombo)) {
+      return res.status(400).json({ success: false, message: 'Debe existir productoId o comboId (solo uno)' });
+    }
+
+    // 1) Devolver inventario del item anterior
+    const oldNeedsResult = await buildInventoryNeeds({
+      productoId: oldProductoId,
+      comboId: oldComboId,
+      qty: oldQty
+    });
+    await applyInventoryDelta(oldNeedsResult.needs, +1);
+
+    try {
+      // 2) Calcular y aplicar inventario del item nuevo
+      const newNeedsResult = await buildInventoryNeeds({
+        productoId: newProductoId,
+        comboId: newComboId,
+        qty: newQty
+      });
+
+      await validateStock(newNeedsResult.needs);
+      await applyInventoryDelta(newNeedsResult.needs, -1);
+
+      // 3) Actualizar el detalle y ajustar total de orden
+      const newUnitPrice = newNeedsResult.unitPrice;
+      const newSubtotal = newUnitPrice * newQty;
+      const diff = Number(newSubtotal) - Number(detail.subtotal);
+
+      detail.set({
+        productoId: newProductoId,
+        comboId: newComboId,
+        cantidad: newQty,
+        precio: newUnitPrice,
+        subtotal: newSubtotal
+      });
+
+      await detail.save();
+
+      await Order.findByIdAndUpdate(detail.order, { $inc: { total: diff } });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Item actualizado y stock reconciliado',
+        data: detail
+      });
+    } catch (innerErr) {
+      // Si falla la aplicación del nuevo inventario, re-aplicar el descuento anterior para no dejar inconsistencia
+      await applyInventoryDelta(oldNeedsResult.needs, -1);
+      throw innerErr;
+    }
+  } catch (error) {
+    return res.status(error.status || 400).json({
+      success: false,
+      message: 'Error al actualizar item',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * ADMIN/EMPLOYEE: Eliminar item
  */
 export const deleteOrderDetail = async (req, res) => {
-    try {
-        if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
-            return res.status(403).json({ success: false, message: 'No autorizado' });
-        }
-        
-        const { id } = req.params;
-
-        const detail = await OrderDetail.findById(id);
-        if (!detail) {
-            return res.status(404).json({
-                success: false,
-                message: 'Item no encontrado'
-            });
-        }
-
-        await Order.findByIdAndUpdate(detail.order, {
-            $inc: { total: -detail.subtotal }
-        });
-
-        await detail.deleteOne();
-
-        res.status(200).json({
-            success: true,
-            message: 'Item eliminado correctamente'
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Error al eliminar item',
-            error: error.message
-        });
+  try {
+    if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: 'No autorizado' });
     }
+
+    const { id } = req.params;
+
+    const detail = await OrderDetail.findById(id);
+    if (!detail) {
+      return res.status(404).json({ success: false, message: 'Item no encontrado' });
+    }
+
+    // Devolver inventario del item
+    const needsResult = await buildInventoryNeeds({
+      productoId: detail.productoId ? detail.productoId.toString() : null,
+      comboId: detail.comboId ? detail.comboId.toString() : null,
+      qty: Number(detail.cantidad)
+    });
+    await applyInventoryDelta(needsResult.needs, +1);
+
+    // Ajustar total orden y borrar item
+    await Order.findByIdAndUpdate(detail.order, { $inc: { total: -Number(detail.subtotal) } });
+    await detail.deleteOne();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Item eliminado y stock restaurado'
+    });
+  } catch (error) {
+    return res.status(error.status || 500).json({
+      success: false,
+      message: 'Error al eliminar item',
+      error: error.message
+    });
+  }
 };

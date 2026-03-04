@@ -5,26 +5,39 @@ import Table from '../Table/table.model.js';
 import Event from '../Event/event.model.js';
 
 /**
- * POST - Crear reservación
- * Permitido para: CLIENT, EMPLOYEE, BRANCH_ADMIN, PLATFORM_ADMIN
+ * POST - Crear reservación (ADMIN)
+ * Permitido para: EMPLOYEE, BRANCH_ADMIN, PLATFORM_ADMIN
+ * Nota: el personal puede asignar clientId manualmente (ventas presenciales/teléfono)
  */
 export const saveReservation = async (req, res) => {
     try {
-        const { branchId, date, time, numberOfPersons, notes } = req.body;
-        
-        // El empleado puede asignar un clientId manualmente (ventas presenciales/teléfono)
-        const clientId = req.user.role === 'CLIENT' ? req.user._id : req.body.clientId;
+        const { branchId, date, time, numberOfPersons, notes, clientId } = req.body;
+
+        // Solo personal (repo admin)
+        if (!['EMPLOYEE', 'BRANCH_ADMIN', 'PLATFORM_ADMIN'].includes(req.user.role)) {
+            return res.status(403).send({ success: false, message: 'No autorizado' });
+        }
+
+        // Restricción por sucursal para BRANCH_ADMIN/EMPLOYEE
+        if (['EMPLOYEE', 'BRANCH_ADMIN'].includes(req.user.role)) {
+            if (!req.user.branchId) {
+                return res.status(400).send({ success: false, message: 'El usuario no tiene branchId asignado' });
+            }
+            if (branchId?.toString() !== req.user.branchId.toString()) {
+                return res.status(403).send({ success: false, message: 'No autorizado para crear reservaciones en otra sucursal' });
+            }
+        }
 
         if (!clientId) {
-            return res.status(400).send({ 
-                success: false, 
-                message: 'El ID del cliente es requerido.' 
+            return res.status(400).send({
+                success: false,
+                message: 'El ID del cliente es requerido.'
             });
         }
 
         const reservationDate = new Date(date);
 
-        // 1. Verificar conflictos en Eventos
+        // 1) Conflictos con eventos (misma fecha y rango de hora)
         const overlapEvents = await Event.find({
             branchId,
             eventDate: reservationDate,
@@ -35,27 +48,27 @@ export const saveReservation = async (req, res) => {
             ]
         }).select('tables');
 
-        // 2. Verificar conflictos en otras Reservaciones
+        // 2) Conflictos con otras reservaciones (misma sucursal, fecha y hora exacta)
         const overlapReservations = await Reservation.find({
             branchId,
             date: reservationDate,
             status: { $in: ['Confirmada', 'Pendiente'] },
-            statusRes: 'ACTIVADO', // Solo chocamos con las que no están en soft-delete
-            time: time 
+            statusRes: 'ACTIVADO',
+            time
         }).select('tableId');
 
         const occupiedTableIds = [
-            ...overlapEvents.flatMap(e => e.tables.map(t => t.toString())),
+            ...overlapEvents.flatMap(e => (e.tables || []).map(t => t.toString())),
             ...overlapReservations.map(r => r.tableId.toString())
         ];
 
-        // 3. Asignación automática de mesa
+        // 3) Asignación automática: mesa con capacidad mínima suficiente
         const bestTable = await Table.findOne({
             branchId,
             TableStatus: 'ACTIVE',
             availability: { $ne: 'Mantenimiento' },
             capacity: { $gte: numberOfPersons },
-            _id: { $nin: occupiedTableIds } 
+            _id: { $nin: occupiedTableIds }
         }).sort({ capacity: 1 });
 
         if (!bestTable) {
@@ -78,11 +91,11 @@ export const saveReservation = async (req, res) => {
 
         await reservation.save();
 
-        return res.status(201).send({ 
-            success: true, 
-            message: 'Reservación creada exitosamente', 
+        return res.status(201).send({
+            success: true,
+            message: 'Reservación creada exitosamente',
             assignedTable: { number: bestTable.numberTable },
-            data: reservation 
+            data: reservation
         });
 
     } catch (err) {
@@ -91,20 +104,25 @@ export const saveReservation = async (req, res) => {
 };
 
 /**
- * GET - Obtener reservaciones
- * Permitido para: CLIENT (propias), EMPLOYEE y ADMINS (sucursal/todas)
+ * GET - Obtener reservaciones (ADMIN)
+ * Permitido para: EMPLOYEE/BRANCH_ADMIN (solo su sucursal), PLATFORM_ADMIN (todas)
  */
 export const getReservations = async (req, res) => {
     try {
+        // Solo personal (repo admin)
+        if (!['EMPLOYEE', 'BRANCH_ADMIN', 'PLATFORM_ADMIN'].includes(req.user.role)) {
+            return res.status(403).send({ success: false, message: 'No autorizado' });
+        }
+
         const filter = { statusRes: 'ACTIVADO' };
-        
-        if (req.user.role === 'CLIENT') {
-            filter.clientId = req.user._id;
-        } else if (req.user.role === 'EMPLOYEE' || req.user.role === 'BRANCH_ADMIN') {
-            // El empleado ve todas las de su sucursal
+
+        if (req.user.role === 'EMPLOYEE' || req.user.role === 'BRANCH_ADMIN') {
+            if (!req.user.branchId) {
+                return res.status(400).send({ success: false, message: 'El usuario no tiene branchId asignado' });
+            }
             filter.branchId = req.user.branchId;
         }
-        // PLATFORM_ADMIN no entra en filtros y ve todo
+        // PLATFORM_ADMIN ve todo
 
         const reservations = await Reservation.find(filter)
             .populate('tableId', 'numberTable capacity')
@@ -118,23 +136,31 @@ export const getReservations = async (req, res) => {
 };
 
 /**
- * PUT - Actualizar reservación
- * Permitido para: CLIENT (solo si es suya), EMPLOYEE y ADMINS
+ * PUT - Actualizar reservación (ADMIN)
+ * Permitido para: EMPLOYEE/BRANCH_ADMIN (solo su sucursal), PLATFORM_ADMIN (todas)
  */
 export const updateReservation = async (req, res) => {
     try {
+        if (!['EMPLOYEE', 'BRANCH_ADMIN', 'PLATFORM_ADMIN'].includes(req.user.role)) {
+            return res.status(403).send({ success: false, message: 'No autorizado' });
+        }
+
         const { id } = req.params;
         const data = req.body;
 
         const reservation = await Reservation.findById(id);
         if (!reservation) return res.status(404).send({ success: false, message: 'No encontrada' });
 
-        // Validación de permisos
-        if (req.user.role === 'CLIENT' && reservation.clientId?.toString() !== req.user._id.toString()) {
-            return res.status(403).send({ success: false, message: 'No autorizado' });
+        // Restricción por sucursal
+        if (req.user.role === 'EMPLOYEE' || req.user.role === 'BRANCH_ADMIN') {
+            if (!req.user.branchId) {
+                return res.status(400).send({ success: false, message: 'El usuario no tiene branchId asignado' });
+            }
+            if (reservation.branchId?.toString() !== req.user.branchId.toString()) {
+                return res.status(403).send({ success: false, message: 'No autorizado' });
+            }
         }
-        
-        // Si el empleado o admin editan, pueden proceder directamente
+
         const updated = await Reservation.findByIdAndUpdate(id, data, { new: true });
         return res.send({ success: true, message: 'Actualizado con éxito', updated });
     } catch (err) {
@@ -143,25 +169,34 @@ export const updateReservation = async (req, res) => {
 };
 
 /**
- * PATCH - Toggle Soft Delete
- * Permitido para: CLIENT (propia), EMPLOYEE y ADMINS
+ * PATCH - Toggle Soft Delete (ADMIN)
+ * Permitido para: EMPLOYEE/BRANCH_ADMIN (solo su sucursal), PLATFORM_ADMIN (todas)
  */
 export const toggleReservationStatus = async (req, res) => {
     try {
-        const { id } = req.params;
-        const reservation = await Reservation.findById(id);
+        if (!['EMPLOYEE', 'BRANCH_ADMIN', 'PLATFORM_ADMIN'].includes(req.user.role)) {
+            return res.status(403).send({ success: false, message: 'No autorizado' });
+        }
 
+        const { id } = req.params;
+
+        const reservation = await Reservation.findById(id);
         if (!reservation) return res.status(404).send({ success: false, message: 'No encontrada' });
 
-        // El empleado tiene permiso para cancelar cualquier reserva de su sucursal
-        if (req.user.role === 'CLIENT' && reservation.clientId.toString() !== req.user._id.toString()) {
-            return res.status(403).send({ success: false, message: 'No autorizado' });
+        // Restricción por sucursal
+        if (req.user.role === 'EMPLOYEE' || req.user.role === 'BRANCH_ADMIN') {
+            if (!req.user.branchId) {
+                return res.status(400).send({ success: false, message: 'El usuario no tiene branchId asignado' });
+            }
+            if (reservation.branchId?.toString() !== req.user.branchId.toString()) {
+                return res.status(403).send({ success: false, message: 'No autorizado' });
+            }
         }
 
         const nuevoEstado = reservation.statusRes === 'ACTIVADO' ? 'DESACTIVADO' : 'ACTIVADO';
         reservation.status = (nuevoEstado === 'DESACTIVADO') ? 'Cancelada' : 'Pendiente';
         reservation.statusRes = nuevoEstado;
-        
+
         await reservation.save();
 
         return res.send({
