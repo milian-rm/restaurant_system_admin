@@ -4,24 +4,13 @@ import OrderRequest from './orderRequest.model.js';
 import Order from '../Order/order.model.js';
 
 /**
- * PERSONAL / ADMIN
  * Ver pedidos de una sucursal
- * - PLATFORM_ADMIN: puede consultar cualquier sucursal (usa branchId del params)
- * - BRANCH_ADMIN / EMPLOYEE: solo puede consultar su propia sucursal (ignora branchId del params)
  */
 export const getBranchOrderRequests = async (req, res) => {
     try {
         const { branchId } = req.params;
 
-        const userRole = req.user.role;
-
-        // Si es admin de sucursal o empleado, forzamos a su sucursal
-        const effectiveBranchId =
-            (userRole === 'BRANCH_ADMIN' || userRole === 'EMPLOYEE')
-                ? req.user.branchId
-                : branchId;
-
-        const orders = await OrderRequest.find({ branch: effectiveBranchId })
+        const orders = await OrderRequest.find({ branch: branchId })
             .populate('customer', 'UserName UserSurname UserEmail')
             .populate('order')
             .sort({ createdAt: -1 });
@@ -41,11 +30,7 @@ export const getBranchOrderRequests = async (req, res) => {
 };
 
 /**
- * PERSONAL actualiza estado del pedido
- * - Evita cambios si ya está finalizado (Cancelado / Entregado)
- * - Valida transición de estados
- * - Sincroniza estado con la Order interna
- * - BRANCH_ADMIN / EMPLOYEE solo pueden modificar pedidos de su sucursal
+ * Actualiza estado del pedido
  */
 export const updateOrderRequestStatus = async (req, res) => {
     try {
@@ -61,17 +46,6 @@ export const updateOrderRequestStatus = async (req, res) => {
             });
         }
 
-        // Seguridad por sucursal
-        if (['BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
-            if (orderRequest.branch?.toString() !== req.user.branchId?.toString()) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'No autorizado (pedido de otra sucursal)'
-                });
-            }
-        }
-
-        // Bloquear si ya está finalizada
         if (orderRequest.orderStatus === 'Cancelado' || orderRequest.orderStatus === 'Entregado') {
             return res.status(400).json({
                 success: false,
@@ -96,11 +70,9 @@ export const updateOrderRequestStatus = async (req, res) => {
             });
         }
 
-        // Actualizar OrderRequest
         orderRequest.orderStatus = orderStatus;
         await orderRequest.save();
 
-        // Sincronizar con Order interna
         await Order.findByIdAndUpdate(orderRequest.order, {
             estado: orderStatus
         });

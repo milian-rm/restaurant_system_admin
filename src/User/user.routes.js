@@ -15,29 +15,34 @@ import {
     validateGetUserById
 } from '../../middlewares/user-validator.js';
 
-import { validateJWT } from '../../middlewares/validate-jwt.js';
-
 const router = Router();
 
-router.get('/', validateJWT, getUsers);
-router.get('/profile', validateJWT, getProfile);
-router.get('/:id',validateJWT, validateGetUserById, getUserById);
+router.get('/', getUsers);
+
+router.get('/profile', getProfile);
+
+router.get(
+    '/:id',
+    validateGetUserById,
+    getUserById
+);
 
 router.post(
     '/',
-    validateJWT,
     validateCreateUser,
     createUser
 );
 
-
 router.put(
     '/:id',
-    validateJWT,
     validateUpdateUserRequest,
     updateUser
 );
 
-router.patch('/:id/status', validateJWT, validateUserStatusChange, changeUserStatus);
+router.patch(
+    '/:id/status',
+    validateUserStatusChange,
+    changeUserStatus
+);
 
 export default router;

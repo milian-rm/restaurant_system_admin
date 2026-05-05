@@ -3,28 +3,11 @@
 import Review from './review.model.js';
 
 /* -----------------------------------------
-   OBTENER RESEÑAS POR SUCURSAL (ADMIN)
-   - PLATFORM_ADMIN: puede ver cualquier sucursal
-   - BRANCH_ADMIN / EMPLOYEE: solo puede ver su propia sucursal
+   OBTENER RESEÑAS POR SUCURSAL
 ------------------------------------------*/
 export const getBranchReviews = async (req, res) => {
     try {
         const { branchId } = req.params;
-
-        if (['BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
-            if (!req.user.branchId) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'El usuario no tiene branchId asignado'
-                });
-            }
-            if (branchId?.toString() !== req.user.branchId.toString()) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'No autorizado para ver reseñas de otra sucursal'
-                });
-            }
-        }
 
         const reviews = await Review.find({
             branch: branchId,
@@ -50,14 +33,11 @@ export const getBranchReviews = async (req, res) => {
 
 
 /* -----------------------------------------
-   ELIMINAR / RESTAURAR RESEÑA (SOFT DELETE) (ADMIN)
-   - PLATFORM_ADMIN: puede modificar cualquiera
-   - BRANCH_ADMIN: solo si la reseña pertenece a su sucursal
+   ELIMINAR / RESTAURAR RESEÑA SOFT DELETE
 ------------------------------------------*/
 export const deleteReview = async (req, res) => {
     try {
         const { id } = req.params;
-        const userRole = req.user.role;
 
         const review = await Review.findById(id);
 
@@ -68,26 +48,16 @@ export const deleteReview = async (req, res) => {
             });
         }
 
-        const isPlatformAdmin = userRole === 'PLATFORM_ADMIN';
-        const isBranchAdmin =
-            userRole === 'BRANCH_ADMIN' &&
-            review.branch?.toString() === req.user.branchId?.toString();
-
-        if (!isPlatformAdmin && !isBranchAdmin) {
-            return res.status(403).json({
-                success: false,
-                message: 'No tienes permiso para modificar el estado de esta reseña'
-            });
-        }
-
         review.isDeleted = !review.isDeleted;
         await review.save();
 
-        const statusMessage = review.isDeleted ? 'eliminada (Soft Delete)' : 'restaurada con éxito';
+        const statusMessage = review.isDeleted
+            ? 'eliminada (Soft Delete)'
+            : 'restaurada con éxito';
 
         res.status(200).json({
             success: true,
-            message: `Reseña ${statusMessage} por ${userRole}`,
+            message: `Reseña ${statusMessage}`,
             data: {
                 id: review._id,
                 isDeleted: review.isDeleted

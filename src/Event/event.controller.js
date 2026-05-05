@@ -3,17 +3,14 @@
 import Event from './event.model.js';
 import Table from '../Table/table.model.js';
 
-// ADMIN: ver eventos (PLATFORM_ADMIN todos / BRANCH_ADMIN & EMPLOYEE solo su sucursal)
+// Ver eventos
 export const getEvents = async (req, res) => {
   try {
-    const { page = 1, limit = 10, status } = req.query;
+    const { page = 1, limit = 10, status, branchId } = req.query;
 
     const filter = {};
 
-    if (req.user.role === 'BRANCH_ADMIN' || req.user.role === 'EMPLOYEE') {
-      filter.branchId = req.user.branchId;
-    }
-
+    if (branchId) filter.branchId = branchId;
     if (status) filter.status = status;
 
     const events = await Event.find(filter)
@@ -46,6 +43,7 @@ export const getEvents = async (req, res) => {
   }
 };
 
+// Obtener evento por ID
 export const getEventById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -56,18 +54,16 @@ export const getEventById = async (req, res) => {
       .populate('tables');
 
     if (!event) {
-      return res.status(404).json({ success: false, message: 'Evento no encontrado' });
+      return res.status(404).json({
+        success: false,
+        message: 'Evento no encontrado'
+      });
     }
 
-    // BRANCH_ADMIN/EMPLOYEE solo pueden ver eventos de su sucursal
-    if (
-      (req.user.role === 'BRANCH_ADMIN' || req.user.role === 'EMPLOYEE') &&
-      event.branchId?._id?.toString() !== req.user.branchId?.toString()
-    ) {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
-    }
-
-    return res.status(200).json({ success: true, data: event });
+    return res.status(200).json({
+      success: true,
+      data: event
+    });
 
   } catch (error) {
     return res.status(500).json({
@@ -78,23 +74,24 @@ export const getEventById = async (req, res) => {
   }
 };
 
-// PLATFORM_ADMIN y BRANCH_ADMIN (pero BRANCH_ADMIN solo la suya)
+// Actualizar evento
 export const updateEvent = async (req, res) => {
   try {
-    if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
-    }
-
     const { id } = req.params;
 
     const existing = await Event.findById(id);
-    if (!existing) return res.status(404).json({ success: false, message: 'Evento no encontrado' });
 
-    if (req.user.role === 'BRANCH_ADMIN' && existing.branchId.toString() !== req.user.branchId.toString()) {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: 'Evento no encontrado'
+      });
     }
 
-    const event = await Event.findByIdAndUpdate(id, req.body, { new: true, runValidators: true })
+    const event = await Event.findByIdAndUpdate(id, req.body, {
+      new: true,
+      runValidators: true
+    })
       .populate('branchId')
       .populate('clientId')
       .populate('tables');
@@ -114,24 +111,19 @@ export const updateEvent = async (req, res) => {
   }
 };
 
-// PLATFORM_ADMIN, BRANCH_ADMIN y EMPLOYEE (BRANCH_ADMIN/EMPLOYEE solo su sucursal)
+// Cambiar estado del evento
 export const changeEventStatus = async (req, res) => {
   try {
-    if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
-    }
-
     const { id } = req.params;
     const { status } = req.body;
 
     const event = await Event.findById(id);
-    if (!event) return res.status(404).json({ success: false, message: 'Evento no encontrado' });
 
-    if (
-      (req.user.role === 'BRANCH_ADMIN' || req.user.role === 'EMPLOYEE') &&
-      event.branchId.toString() !== req.user.branchId.toString()
-    ) {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: 'Evento no encontrado'
+      });
     }
 
     event.status = status;
@@ -152,20 +144,19 @@ export const changeEventStatus = async (req, res) => {
   }
 };
 
-// EMPLOYEE/BRANCH_ADMIN/PLATFORM_ADMIN (BRANCH_ADMIN/EMPLOYEE solo su sucursal)
+// Iniciar o finalizar evento
 export const toggleEventAttendance = async (req, res) => {
   try {
     const { id } = req.params;
-    const { action } = req.body; // 'INICIAR' o 'FINALIZAR'
+    const { action } = req.body;
 
     const event = await Event.findById(id);
-    if (!event) return res.status(404).json({ success: false, message: 'Evento no encontrado' });
 
-    if (
-      (req.user.role === 'BRANCH_ADMIN' || req.user.role === 'EMPLOYEE') &&
-      event.branchId.toString() !== req.user.branchId.toString()
-    ) {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: 'Evento no encontrado'
+      });
     }
 
     let newTableStatus;
@@ -178,7 +169,10 @@ export const toggleEventAttendance = async (req, res) => {
       newTableStatus = 'Disponible';
       newEventStatus = 'Finalizado';
     } else {
-      return res.status(400).json({ success: false, message: 'Acción no válida. Use INICIAR o FINALIZAR' });
+      return res.status(400).json({
+        success: false,
+        message: 'Acción no válida. Use INICIAR o FINALIZAR'
+      });
     }
 
     await Table.updateMany(
@@ -210,11 +204,6 @@ export const toggleEventAttendance = async (req, res) => {
 // Crear evento
 export const createEvent = async (req, res) => {
   try {
-
-    if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
-    }
-
     const {
       branchId,
       clientId,
@@ -226,17 +215,6 @@ export const createEvent = async (req, res) => {
       numberOfPersons,
       notes
     } = req.body;
-
-    // BRANCH_ADMIN y EMPLOYEE solo pueden crear eventos en su sucursal
-    if (
-      (req.user.role === 'BRANCH_ADMIN' || req.user.role === 'EMPLOYEE') &&
-      branchId !== req.user.branchId
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: 'No autorizado para crear eventos en otra sucursal'
-      });
-    }
 
     const dateFilter = new Date(eventDate);
 
@@ -273,14 +251,12 @@ export const createEvent = async (req, res) => {
     let accumulatedCapacity = 0;
 
     for (const table of availableTables) {
-
       if (accumulatedCapacity < numberOfPersons) {
         assignedTables.push(table._id);
         accumulatedCapacity += table.capacity;
       } else {
         break;
       }
-
     }
 
     const newEvent = new Event({
@@ -305,12 +281,10 @@ export const createEvent = async (req, res) => {
     });
 
   } catch (error) {
-
     return res.status(500).json({
       success: false,
       message: 'Error al crear evento',
       error: error.message
     });
-
   }
 };

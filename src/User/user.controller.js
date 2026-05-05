@@ -4,36 +4,17 @@ import User from './user.model.js';
 
 /**
  * GET /users
- * PLATFORM_ADMIN: ve todos (con filtros opcionales)
- * BRANCH_ADMIN: ve solo EMPLOYEE/CLIENT de su propia sucursal
+ * Obtener usuarios con filtros opcionales
  */
 export const getUsers = async (req, res) => {
   try {
-    if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
-    }
+    const { role, UserStatus, branchId } = req.query;
 
-    const { role, UserStatus } = req.query;
     const filter = {};
 
-    if (req.user.role === 'BRANCH_ADMIN') {
-      // Solo puede ver EMPLOYEE y CLIENT
-      filter.role = { $in: ['EMPLOYEE', 'CLIENT'] };
-
-      // Solo de su sucursal
-      filter.branchId = req.user.branchId;
-
-      // Si piden role, solo acepta EMPLOYEE/CLIENT
-      if (role && !['EMPLOYEE', 'CLIENT'].includes(role)) {
-        return res.status(403).json({ success: false, message: 'No puede ver administradores' });
-      }
-      if (role) filter.role = role;
-    } else {
-      // PLATFORM_ADMIN puede filtrar cualquier rol
-      if (role) filter.role = role;
-    }
-
+    if (role) filter.role = role;
     if (UserStatus) filter.UserStatus = UserStatus;
+    if (branchId) filter.branchId = branchId;
 
     const users = await User.find(filter).select('-password');
 
@@ -53,35 +34,25 @@ export const getUsers = async (req, res) => {
 
 /**
  * GET /users/:id
- * PLATFORM_ADMIN: puede ver cualquiera
- * BRANCH_ADMIN: solo EMPLOYEE/CLIENT y solo de su sucursal
+ * Obtener usuario por ID
  */
 export const getUserById = async (req, res) => {
   try {
-    if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
-    }
-
     const { id } = req.params;
 
     const user = await User.findById(id).select('-password');
 
     if (!user) {
-      return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+      return res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado'
+      });
     }
 
-    if (req.user.role === 'BRANCH_ADMIN') {
-      // No puede ver admins
-      if (!['EMPLOYEE', 'CLIENT'].includes(user.role)) {
-        return res.status(403).json({ success: false, message: 'No autorizado' });
-      }
-      // Solo puede ver usuarios de su sucursal
-      if (user.branchId?.toString() !== req.user.branchId?.toString()) {
-        return res.status(403).json({ success: false, message: 'No autorizado' });
-      }
-    }
-
-    return res.status(200).json({ success: true, data: user });
+    return res.status(200).json({
+      success: true,
+      data: user
+    });
 
   } catch (error) {
     return res.status(500).json({
@@ -94,41 +65,22 @@ export const getUserById = async (req, res) => {
 
 /**
  * POST /users
- * PLATFORM_ADMIN: puede crear cualquiera
- * BRANCH_ADMIN: solo EMPLOYEE/CLIENT (y debe asignarse a su branch)
+ * Crear usuario
  */
 export const createUser = async (req, res) => {
   try {
-    const creator = req.user;
-    let { role, ...data } = req.body;
+    const data = req.body;
 
-    if (!creator) {
-      return res.status(401).json({ message: 'No autenticado' });
-    }
-
-    switch (creator.role) {
-      case 'PLATFORM_ADMIN':
-        break;
-
-      case 'BRANCH_ADMIN':
-        if (role === 'PLATFORM_ADMIN' || role === 'BRANCH_ADMIN') {
-          return res.status(403).json({ message: 'No puede crear administradores' });
-        }
-        // Fuerza la sucursal del BRANCH_ADMIN
-        data.branchId = creator.branchId;
-        break;
-
-      default:
-        return res.status(403).json({ message: 'No tiene permisos para crear usuarios' });
-    }
-
-    const user = new User({ ...data, role });
+    const user = new User(data);
     await user.save();
+
+    const userResponse = user.toObject();
+    delete userResponse.password;
 
     return res.status(201).json({
       success: true,
       message: 'Usuario creado correctamente',
-      data: user
+      data: userResponse
     });
 
   } catch (error) {
@@ -142,51 +94,26 @@ export const createUser = async (req, res) => {
 
 /**
  * PUT /users/:id
- * PLATFORM_ADMIN: puede editar cualquiera (sin password)
- * BRANCH_ADMIN: solo EMPLOYEE/CLIENT y solo de su sucursal
+ * Actualizar usuario
  */
 export const updateUser = async (req, res) => {
   try {
-    if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
-    }
-
     const { id } = req.params;
     const updates = req.body;
 
     delete updates.password;
 
-    const targetUser = await User.findById(id);
-    if (!targetUser) {
-      return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
-    }
+    const user = await User.findByIdAndUpdate(id, updates, {
+      new: true,
+      runValidators: true
+    }).select('-password');
 
-    if (req.user.role === 'BRANCH_ADMIN') {
-      // Solo EMPLOYEE/CLIENT
-      if (!['EMPLOYEE', 'CLIENT'].includes(targetUser.role)) {
-        return res.status(403).json({ success: false, message: 'No puede editar a otros administradores' });
-      }
-      // Solo de su sucursal
-      if (targetUser.branchId?.toString() !== req.user.branchId?.toString()) {
-        return res.status(403).json({ success: false, message: 'No autorizado' });
-      }
-      // Evita cambiar branchId fuera de su sucursal
-      updates.branchId = req.user.branchId;
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado'
+      });
     }
-
-    if (updates.role) {
-      if (req.user.role === 'BRANCH_ADMIN' && ['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(updates.role)) {
-        return res.status(403).json({
-          success: false,
-          message: 'No tienes permiso para asignar roles administrativos'
-        });
-      }
-    } else {
-      delete updates.role;
-    }
-
-    const user = await User.findByIdAndUpdate(id, updates, { new: true, runValidators: true })
-      .select('-password');
 
     return res.status(200).json({
       success: true,
@@ -205,27 +132,19 @@ export const updateUser = async (req, res) => {
 
 /**
  * PATCH /users/:id/status
- * PLATFORM_ADMIN: puede cambiar estado de cualquiera
- * BRANCH_ADMIN: solo EMPLOYEE/CLIENT y solo de su sucursal
+ * Cambiar estado del usuario
  */
 export const changeUserStatus = async (req, res) => {
   try {
-    if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
-    }
-
     const { id } = req.params;
 
     const user = await User.findById(id);
-    if (!user) return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
 
-    if (req.user.role === 'BRANCH_ADMIN') {
-      if (!['EMPLOYEE', 'CLIENT'].includes(user.role)) {
-        return res.status(403).json({ success: false, message: 'No puede cambiar estado de administradores' });
-      }
-      if (user.branchId?.toString() !== req.user.branchId?.toString()) {
-        return res.status(403).json({ success: false, message: 'No autorizado' });
-      }
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado'
+      });
     }
 
     user.UserStatus = user.UserStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
@@ -233,10 +152,13 @@ export const changeUserStatus = async (req, res) => {
 
     await user.save();
 
+    const userResponse = user.toObject();
+    delete userResponse.password;
+
     return res.status(200).json({
       success: true,
       message: `Usuario ${user.UserStatus}`,
-      data: user
+      data: userResponse
     });
 
   } catch (error) {
@@ -250,11 +172,12 @@ export const changeUserStatus = async (req, res) => {
 
 /**
  * GET /users/profile
- * Devuelve el usuario autenticado (req.user) según el JWT.
+ * Sin JWT ya no hay usuario autenticado.
+ * Usa GET /users/:id para obtener un usuario específico.
  */
 export const getProfile = async (req, res) => {
-  return res.status(200).json({
-    success: true,
-    user: req.user
+  return res.status(400).json({
+    success: false,
+    message: 'La ruta profile requiere autenticación. Sin validateJWT, usa /users/:id'
   });
 };

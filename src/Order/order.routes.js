@@ -1,8 +1,6 @@
 'use strict';
 
 import { Router } from 'express';
-import { validateJWT } from '../../middlewares/validate-jwt.js';
-import { hasRole } from '../../middlewares/role-validator.js';
 
 import {
   getOrders,
@@ -19,34 +17,29 @@ import {
 
 const router = Router();
 
-router.get('/',
-  validateJWT,
-  hasRole('EMPLOYEE','BRANCH_ADMIN','PLATFORM_ADMIN'),
+router.get(
+  '/',
   getOrders
 );
 
-router.get('/:id',
-  validateJWT,
-  hasRole('EMPLOYEE','BRANCH_ADMIN','PLATFORM_ADMIN'),
+router.get(
+  '/:id',
   getOrderById
 );
 
-router.post('/',
-  validateJWT,
-  hasRole('EMPLOYEE','BRANCH_ADMIN','PLATFORM_ADMIN'),
+router.post(
+  '/',
   validateCreateOrder,
   createOrder
 );
 
-router.put('/:id',
-  validateJWT,
-  hasRole('EMPLOYEE','BRANCH_ADMIN','PLATFORM_ADMIN'),
+router.put(
+  '/:id',
   updateOrder
 );
 
-router.patch('/:id/status',
-  validateJWT,
-  hasRole('EMPLOYEE','BRANCH_ADMIN','PLATFORM_ADMIN'),
+router.patch(
+  '/:id/status',
   validateUpdateStatus,
   changeOrderStatus
 );

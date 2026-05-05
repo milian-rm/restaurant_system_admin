@@ -4,21 +4,13 @@ import Combo from './combo.model.js';
 import Product from '../Product/product.model.js';
 
 // Obtener combos
-// - PLATFORM_ADMIN / BRANCH_ADMIN: por defecto ve TODOS (ACTIVE + INACTIVE)
-// - EMPLOYEE: por defecto solo ACTIVE
 export const getCombos = async (req, res) => {
   try {
     const { page = 1, limit = 10, ComboStatus } = req.query;
 
     const filter = {};
 
-    // EMPLOYEE solo puede ver ACTIVE (ignora query)
-    if (req.user.role === 'EMPLOYEE') {
-      filter.ComboStatus = 'ACTIVE';
-    } else {
-      // Admins: si mandan ComboStatus, filtra; si no, ve todos
-      if (ComboStatus) filter.ComboStatus = ComboStatus;
-    }
+    if (ComboStatus) filter.ComboStatus = ComboStatus;
 
     const combos = await Combo.find(filter)
       .populate({
@@ -52,8 +44,6 @@ export const getCombos = async (req, res) => {
 };
 
 // Obtener combo por ID
-// - EMPLOYEE: solo si es ACTIVE
-// - Admins: puede ver cualquiera
 export const getComboById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -68,10 +58,6 @@ export const getComboById = async (req, res) => {
         success: false,
         message: 'Combo no encontrado'
       });
-    }
-
-    if (req.user.role === 'EMPLOYEE' && combo.ComboStatus !== 'ACTIVE') {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
     }
 
     return res.status(200).json({
@@ -89,18 +75,14 @@ export const getComboById = async (req, res) => {
 };
 
 // Crear combo
-// PLATFORM_ADMIN Y BRANCH_ADMIN
 export const createCombo = async (req, res) => {
   try {
-    if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
-    }
-
     const comboData = req.body;
 
     if (comboData.ComboList && comboData.ComboList.length > 0) {
       for (const item of comboData.ComboList) {
         const productExists = await Product.findById(item.productId);
+
         if (!productExists) {
           return res.status(404).json({
             success: false,
@@ -129,18 +111,12 @@ export const createCombo = async (req, res) => {
 };
 
 // Actualizar combo
-// PLATFORM_ADMIN y BRANCH_ADMIN
 export const updateCombo = async (req, res) => {
   try {
-    if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
-    }
-
     const { id } = req.params;
     const data = req.body;
 
     if (data.ComboList && Array.isArray(data.ComboList)) {
-
       if (data.ComboList.length === 0) {
         return res.status(400).json({
           success: false,
@@ -150,6 +126,7 @@ export const updateCombo = async (req, res) => {
 
       for (const item of data.ComboList) {
         const productExists = await Product.findById(item.productId);
+
         if (!productExists) {
           return res.status(404).json({
             success: false,
@@ -186,13 +163,9 @@ export const updateCombo = async (req, res) => {
   }
 };
 
-// PLATFORM_ADMIN, BRANCH_ADMIN y EMPLOYEE
+// Cambiar estado del combo
 export const changeComboStatus = async (req, res) => {
   try {
-    if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN', 'EMPLOYEE'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
-    }
-
     const { id } = req.params;
 
     const combo = await Combo.findById(id);

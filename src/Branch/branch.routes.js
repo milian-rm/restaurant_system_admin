@@ -17,13 +17,31 @@ import {
 
 import { uploadBranchImage } from '../../middlewares/file-uploader.js';
 
-import { validateJWT } from '../../middlewares/validate-jwt.js';
-
 const router = Router();
 
-router.post('/', validateJWT, uploadBranchImage.single('Photos'), validateCreateBranch, createBranch);
-router.get('/', validateJWT, getBranches);
-router.put('/:id', validateJWT, uploadBranchImage.single('Photos'), validateUpdateBranch, updateBranch);
-router.patch('/:id/status', validateJWT, validateBranchIdParam, changeBranchStatus);
+router.post(
+    '/',
+    uploadBranchImage.single('Photos'),
+    validateCreateBranch,
+    createBranch
+);
+
+router.get(
+    '/',
+    getBranches
+);
+
+router.put(
+    '/:id',
+    uploadBranchImage.single('Photos'),
+    validateUpdateBranch,
+    updateBranch
+);
+
+router.patch(
+    '/:id/status',
+    validateBranchIdParam,
+    changeBranchStatus
+);
 
 export default router;

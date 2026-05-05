@@ -2,7 +2,7 @@
 
 import Branch from './branch.model.js';
 
-// TODOS (admin puede ver ACTIVE/INACTIVE si manda query)
+// TODOS
 export const getBranches = async (req, res) => {
   try {
     const { zone, branchStatus } = req.query;
@@ -26,13 +26,9 @@ export const getBranches = async (req, res) => {
   }
 };
 
-// SOLO PLATFORM_ADMIN
+// Crear sucursal
 export const createBranch = async (req, res) => {
   try {
-    if (req.user.role !== 'PLATFORM_ADMIN') {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
-    }
-
     const data = req.body;
 
     if (req.file) {
@@ -42,30 +38,22 @@ export const createBranch = async (req, res) => {
     const branch = new Branch(data);
     await branch.save();
 
-    return res.status(201).json({ success: true, data: branch });
+    return res.status(201).json({
+      success: true,
+      data: branch
+    });
   } catch (error) {
-    return res.status(400).json({ success: false, error: error.message });
+    return res.status(400).json({
+      success: false,
+      error: error.message
+    });
   }
 };
 
-// SOLO PLATFORM_ADMIN y BRANCH_ADMIN (BRANCH_ADMIN solo su sucursal)
+// Actualizar sucursal
 export const updateBranch = async (req, res) => {
   try {
-    if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
-    }
-
     const { id } = req.params;
-
-    // Restricción: BRANCH_ADMIN solo puede modificar su sucursal
-    if (req.user.role === 'BRANCH_ADMIN') {
-      if (!req.user.branchId) {
-        return res.status(400).json({ success: false, message: 'Tu usuario no tiene branchId asignado' });
-      }
-      if (req.user.branchId.toString() !== id.toString()) {
-        return res.status(403).json({ success: false, message: 'No autorizado: solo puedes modificar tu sucursal' });
-      }
-    }
 
     const data = req.body;
 
@@ -73,8 +61,9 @@ export const updateBranch = async (req, res) => {
       data.Photos = [{ ImgaeURL: req.file.path }];
     }
 
-    // FIX: usar data (no req.body)
-    const branch = await Branch.findByIdAndUpdate(id, data, { new: true });
+    const branch = await Branch.findByIdAndUpdate(id, data, {
+      new: true
+    });
 
     if (!branch) {
       return res.status(404).json({
@@ -83,20 +72,23 @@ export const updateBranch = async (req, res) => {
       });
     }
 
-    return res.status(200).json({ success: true, data: branch });
+    return res.status(200).json({
+      success: true,
+      data: branch
+    });
   } catch (error) {
-    return res.status(400).json({ success: false, error: error.message });
+    return res.status(400).json({
+      success: false,
+      error: error.message
+    });
   }
 };
 
-// SOLO PLATFORM_ADMIN
+// Cambiar estado de sucursal
 export const changeBranchStatus = async (req, res) => {
   try {
-    if (req.user.role !== 'PLATFORM_ADMIN') {
-      return res.status(403).json({ success: false, message: 'No autorizado' });
-    }
-
     const { id } = req.params;
+
     const branch = await Branch.findById(id);
 
     if (!branch) {

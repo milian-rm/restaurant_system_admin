@@ -1,8 +1,6 @@
 'use strict';
 
 import { Router } from 'express';
-import { validateJWT } from '../../middlewares/validate-jwt.js';
-import { hasRole } from '../../middlewares/role-validator.js';
 
 import {
   getEvents,
@@ -22,38 +20,36 @@ import {
 
 const router = Router();
 
-router.get('/', 
-    validateJWT, 
-    getEvents
+router.get(
+  '/',
+  getEvents
 );
 
-router.get('/:id', 
-    validateJWT, 
-    validateGetEventById, 
-    getEventById
+router.get(
+  '/:id',
+  validateGetEventById,
+  getEventById
 );
 
-router.put('/:id', 
-    validateJWT, 
-    validateUpdateEventRequest, 
-    updateEvent
+router.put(
+  '/:id',
+  validateUpdateEventRequest,
+  updateEvent
 );
 
-router.patch('/:id/status', 
-    validateJWT, 
-    validateEventStatusChange, 
-    changeEventStatus
+router.patch(
+  '/:id/status',
+  validateEventStatusChange,
+  changeEventStatus
 );
 
 router.patch(
   '/:id/attendance',
-  [validateJWT, hasRole('EMPLOYEE', 'BRANCH_ADMIN', 'PLATFORM_ADMIN')],
   toggleEventAttendance
 );
 
 router.post(
   '/',
-  validateJWT,
   validateCreateEvent,
   createEvent
 );

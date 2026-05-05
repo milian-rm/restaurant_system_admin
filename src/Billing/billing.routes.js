@@ -7,30 +7,15 @@ import {
     createBilling,
     payBilling
 } from './billing.controller.js';
-import { validateJWT } from '../../middlewares/validate-jwt.js';
-import { hasRole } from '../../middlewares/role-validator.js';
 
 const router = Router();
 
-router.get('/', [validateJWT, 
-    hasRole('PLATFORM_ADMIN','BRANCH_ADMIN','EMPLOYEE')], 
-    getBillings
-);
+router.get('/', getBillings);
 
-router.get('/:id', [validateJWT, 
-    hasRole('PLATFORM_ADMIN','BRANCH_ADMIN','EMPLOYEE')], 
-    getBillingById
-);
+router.get('/:id', getBillingById);
 
+router.post('/', createBilling);
 
-router.post('/', [validateJWT, 
-    hasRole('PLATFORM_ADMIN','BRANCH_ADMIN','EMPLOYEE')], 
-    createBilling
-);
-
-router.patch('/pay/:id', [validateJWT, 
-    hasRole('PLATFORM_ADMIN','BRANCH_ADMIN','EMPLOYEE')], 
-    payBilling
-);
+router.patch('/pay/:id', payBilling);
 
 export default router;

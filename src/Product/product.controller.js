@@ -29,24 +29,16 @@ const updatedBranchAverage = async (branchId) => {
     });
 };
 
-// Obtener productos (con filtros y paginación)
+// Obtener productos con filtros y paginación
 export const getProducts = async (req, res) => {
     try {
         const { page = 1, limit = 10, categoria, estado, ProductStatus } = req.query;
+
         const filter = {};
 
-        // Filtros opcionales
         if (categoria) filter.categoria = categoria;
         if (estado) filter.estado = estado;
-
-        // Visibilidad por rol
-        if (req.user.role === 'CLIENT' || req.user.role === 'EMPLOYEE') {
-            // Cliente y empleado solo ven productos activos
-            filter.ProductStatus = 'ACTIVE';
-        } else {
-            // Admins pueden filtrar por status si lo envían
-            if (ProductStatus) filter.ProductStatus = ProductStatus;
-        }
+        if (ProductStatus) filter.ProductStatus = ProductStatus;
 
         const products = await Product.find(filter)
             .populate('ingredientes.inventoryId', 'name stock unitCost')
@@ -66,20 +58,18 @@ export const getProducts = async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 };
 
-// Crear producto (solo PLATFORM_ADMIN y BRANCH_ADMIN)
+// Crear producto
 export const createProduct = async (req, res) => {
     try {
-        if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(req.user.role)) {
-            return res.status(403).json({ success: false, message: 'No autorizado' });
-        }
-
         const data = req.body;
 
-        // Validación: ingredientes obligatorios
         if (!data.ingredientes || !Array.isArray(data.ingredientes) || data.ingredientes.length === 0) {
             return res.status(400).json({
                 success: false,
@@ -87,9 +77,9 @@ export const createProduct = async (req, res) => {
             });
         }
 
-        // Validación: cada ingrediente debe existir
         for (const item of data.ingredientes) {
             const inventoryExists = await Inventory.findById(item.inventoryId);
+
             if (!inventoryExists) {
                 return res.status(404).json({
                     success: false,
@@ -98,7 +88,6 @@ export const createProduct = async (req, res) => {
             }
         }
 
-        // Imagen (Cloudinary)
         if (req.file) {
             data.imagen_url = req.file.path;
         }
@@ -106,31 +95,32 @@ export const createProduct = async (req, res) => {
         const product = new Product(data);
         await product.save();
 
-        // Recalcular promedio por sucursal
         for (const branch of product.Branches) {
             await updatedBranchAverage(branch.BranchId);
         }
 
-        res.status(201).json({ success: true, data: product });
+        res.status(201).json({
+            success: true,
+            data: product
+        });
     } catch (error) {
-        res.status(400).json({ success: false, error: error.message });
+        res.status(400).json({
+            success: false,
+            error: error.message
+        });
     }
 };
 
-// Actualizar producto (solo PLATFORM_ADMIN y BRANCH_ADMIN)
+// Actualizar producto
 export const updatedProduct = async (req, res) => {
     try {
-        if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(req.user.role)) {
-            return res.status(403).json({ success: false, message: 'No autorizado' });
-        }
-
         const { id } = req.params;
         const data = req.body;
 
-        // Validación: si vienen ingredientes, deben existir
         if (data.ingredientes && Array.isArray(data.ingredientes)) {
             for (const item of data.ingredientes) {
                 const inventoryExists = await Inventory.findById(item.inventoryId);
+
                 if (!inventoryExists) {
                     return res.status(404).json({
                         success: false,
@@ -140,7 +130,6 @@ export const updatedProduct = async (req, res) => {
             }
         }
 
-        // Imagen (Cloudinary)
         if (req.file) {
             data.imagen_url = req.file.path;
         }
@@ -151,32 +140,40 @@ export const updatedProduct = async (req, res) => {
         }).populate('ingredientes.inventoryId', 'name stock');
 
         if (!updated) {
-            return res.status(404).json({ success: false, message: 'Producto no encontrado' });
+            return res.status(404).json({
+                success: false,
+                message: 'Producto no encontrado'
+            });
         }
 
-        // Recalcular promedio por sucursal
         for (const branch of updated.Branches) {
             await updatedBranchAverage(branch.BranchId);
         }
 
-        res.status(200).json({ success: true, data: updated });
+        res.status(200).json({
+            success: true,
+            data: updated
+        });
     } catch (error) {
-        res.status(400).json({ success: false, error: error.message });
+        res.status(400).json({
+            success: false,
+            error: error.message
+        });
     }
 };
 
-// Soft delete (toggle ACTIVE/INACTIVE) (solo PLATFORM_ADMIN y BRANCH_ADMIN)
+// Soft delete toggle ACTIVE/INACTIVE
 export const changeProductStatus = async (req, res) => {
     try {
-        if (!['PLATFORM_ADMIN', 'BRANCH_ADMIN'].includes(req.user.role)) {
-            return res.status(403).json({ success: false, message: 'No autorizado' });
-        }
-
         const { id } = req.params;
+
         const product = await Product.findById(id);
 
         if (!product) {
-            return res.status(404).json({ success: false, message: 'Producto no encontrado' });
+            return res.status(404).json({
+                success: false,
+                message: 'Producto no encontrado'
+            });
         }
 
         product.ProductStatus = product.ProductStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
@@ -184,7 +181,6 @@ export const changeProductStatus = async (req, res) => {
 
         await product.save();
 
-        // Recalcular promedio por sucursal
         for (const branch of product.Branches) {
             await updatedBranchAverage(branch.BranchId);
         }
@@ -195,6 +191,9 @@ export const changeProductStatus = async (req, res) => {
             data: product
         });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 };

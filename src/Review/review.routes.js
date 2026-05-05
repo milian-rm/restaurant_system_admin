@@ -1,8 +1,6 @@
 'use strict';
 
 import { Router } from 'express';
-import { validateJWT } from '../../middlewares/validate-jwt.js';
-import { hasRole } from '../../middlewares/role-validator.js';
 
 import {
     getBranchReviews,
@@ -22,16 +20,12 @@ const router = Router();
 // Ver reseñas por sucursal
 router.get(
     '/branch/:branchId',
-    validateJWT,
-    hasRole('EMPLOYEE', 'BRANCH_ADMIN', 'PLATFORM_ADMIN'),
     getBranchReviews
 );
 
-// Soft Delete (PATCH) - solo admins (según tu lógica actual)
+// Soft Delete PATCH
 router.patch(
     '/:id/status',
-    validateJWT,
-    hasRole('BRANCH_ADMIN', 'PLATFORM_ADMIN'),
     validateDeleteReview,
     deleteReview
 );
