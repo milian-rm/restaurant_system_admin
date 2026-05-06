@@ -13,18 +13,22 @@ import {
     validateAdditionalServiceStatusChange
 } from '../../middlewares/additionalService-validator.js';
 
+import { uploadAdditionalServiceImage } from '../../middlewares/file-uploader.js';
+
 const router = Router();
 
 router.get('/', getAdditionalServices);
 
 router.post(
     '/',
+    uploadAdditionalServiceImage.single('image'),
     validateCreateAdditionalService,
     createAdditionalService
 );
 
 router.put(
     '/:id',
+    uploadAdditionalServiceImage.single('image'),
     validateUpdateAdditionalService,
     updateAdditionalService
 );

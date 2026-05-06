@@ -13,6 +13,10 @@ const additionalServiceSchema = new Schema({
         type: Number,
         required: true
     },
+    image: {
+        url: String,
+        public_id: String
+    },
     status: {
         type: String,
         enum: ['ACTIVE', 'INACTIVE'],

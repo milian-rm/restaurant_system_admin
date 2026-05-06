@@ -43,7 +43,16 @@ export const getAdditionalServices = async (req, res) => {
 // Crear servicio adicional
 export const createAdditionalService = async (req, res) => {
     try {
-        const service = new AdditionalService(req.body);
+        const serviceData = req.body;
+
+        if (req.file) {
+            serviceData.image = {
+                url: req.file.path, // Cloudinary devuelve la URL aquí
+                public_id: req.file.filename // este es el public_id
+            };
+        }
+
+        const service = new AdditionalService(serviceData);
         await service.save();
 
         return res.status(201).json({
@@ -53,6 +62,7 @@ export const createAdditionalService = async (req, res) => {
         });
 
     } catch (error) {
+        console.log(error);
         return res.status(400).json({
             success: false,
             message: 'Error al crear el servicio adicional',
@@ -65,10 +75,18 @@ export const createAdditionalService = async (req, res) => {
 export const updateAdditionalService = async (req, res) => {
     try {
         const { id } = req.params;
+        const updateData = req.body;
+
+        if (req.file) {
+            updateData.image = {
+                url: req.file.path,
+                public_id: req.file.filename
+            };
+        }
 
         const service = await AdditionalService.findByIdAndUpdate(
             id,
-            req.body,
+            updateData,
             {
                 new: true,
                 runValidators: true,
