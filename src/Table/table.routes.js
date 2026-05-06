@@ -31,8 +31,7 @@ api.put(
 );
 
 api.patch(
-    '/:id/status',
-    changeTableStatus
-);
+    '/:id',
+     changeTableStatus);
 
 export default api;

@@ -3,133 +3,111 @@
 import Table from './table.model.js';
 
 /* -----------------------------------------
-   CREAR MESA
+    OBTENER MESAS (GET)
+------------------------------------------*/
+export const getTables = async (req, res) => {
+    try {
+        // Buscamos solo las mesas ACTIVE
+        // IMPORTANTE: Solo hacemos populate de 'branchId' 
+        // Verifica que en tu table.model.js el campo se llame exactamente 'branchId'
+        const tables = await Table.find({ TableStatus: 'ACTIVE' })
+            .populate('branchId', 'name'); 
+
+        return res.json({
+            success: true,
+            tables: tables || []
+        });
+    } catch (err) {
+        console.error("Error en getTables:", err);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Error al obtener mesas',
+            error: err.message 
+        });
+    }
+};
+
+/* -----------------------------------------
+    CREAR MESA (POST)
 ------------------------------------------*/
 export const saveTable = async (req, res) => {
     try {
         const data = { ...req.body };
 
+        // Si el modal manda 'branch', lo pasamos a 'branchId' para el modelo
+        if (data.branch && !data.branchId) {
+            data.branchId = data.branch;
+        }
+
         const table = await Table.create(data);
+        
+        // Hacemos un populate rápido para que la nueva mesa tenga el nombre de la sucursal
+        const populatedTable = await Table.findById(table._id).populate('branchId', 'name');
 
         return res.status(201).json({
             success: true,
-            message: 'Mesa registrada',
-            table
+            message: 'Mesa creada',
+            table: populatedTable 
         });
-
     } catch (err) {
-        if (err.code === 11000) {
-            return res.status(400).json({
-                success: false,
-                message: 'Ya existe esa mesa en esta sucursal (numberTable duplicado)'
-            });
-        }
-
-        return res.status(500).json({
-            success: false,
-            message: 'Error al registrar mesa',
-            err: err.message
+        console.error("Error en saveTable:", err);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Error al crear mesa',
+            error: err.message 
         });
     }
 };
 
 /* -----------------------------------------
-   OBTENER MESAS
-------------------------------------------*/
-export const getTables = async (req, res) => {
-    try {
-        const filter = {};
-
-        if (req.query.branchId) {
-            filter.branchId = req.query.branchId;
-        }
-
-        if (req.query.TableStatus) {
-            filter.TableStatus = req.query.TableStatus;
-        }
-
-        const tables = await Table.find(filter).populate('branchId', 'name');
-
-        return res.json({
-            success: true,
-            tables
-        });
-    } catch (err) {
-        return res.status(500).json({
-            success: false,
-            message: 'Error al obtener mesas',
-            err: err.message
-        });
-    }
-};
-
-/* -----------------------------------------
-   ACTUALIZAR MESA
+    ACTUALIZAR MESA (PUT)
 ------------------------------------------*/
 export const updateTable = async (req, res) => {
     try {
         const { id } = req.params;
-        const data = req.body;
+        const data = { ...req.body };
 
-        const table = await Table.findById(id);
+        if (data.branch && !data.branchId) data.branchId = data.branch;
 
-        if (!table) {
-            return res.status(404).json({
-                success: false,
-                message: 'Mesa no encontrada'
-            });
-        }
+        const updated = await Table.findByIdAndUpdate(id, data, { new: true })
+            .populate('branchId', 'name');
 
-        const updated = await Table.findByIdAndUpdate(id, data, {
-            new: true,
-            runValidators: true
-        });
+        if (!updated) return res.status(404).json({ success: false, message: 'No existe' });
 
         return res.json({
             success: true,
             message: 'Mesa actualizada',
-            updated
+            updated 
         });
     } catch (err) {
-        return res.status(500).json({
-            success: false,
-            message: 'Error al actualizar',
-            err: err.message
-        });
+        return res.status(500).json({ success: false, error: err.message });
     }
 };
 
 /* -----------------------------------------
-   CAMBIAR ESTADO SOFT DELETE
+    ELIMINAR MESA (PATCH)
 ------------------------------------------*/
 export const changeTableStatus = async (req, res) => {
     try {
         const { id } = req.params;
+        const table = await Table.findByIdAndUpdate(
+            id, 
+            { TableStatus: 'INACTIVE', deletedAt: new Date() },
+            { new: true }
+        );
 
-        const table = await Table.findById(id);
-
-        if (!table) {
-            return res.status(404).json({
-                success: false,
-                message: 'Mesa no encontrada'
-            });
-        }
-
-        table.TableStatus = table.TableStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-        table.deletedAt = table.TableStatus === 'INACTIVE' ? new Date() : null;
-
-        await table.save();
+        if (!table) return res.status(404).json({ success: false, message: 'No encontrada' });
 
         return res.json({
             success: true,
-            message: `Estado de mesa cambiado a ${table.TableStatus}`,
+            message: 'Mesa eliminada',
             table
         });
     } catch (err) {
-        return res.status(500).json({
-            success: false,
-            message: 'Error al cambiar estado',
-            err: err.message
-        });
+        return res.status(500).json({ success: false, error: err.message });
     }
 };
+
+// Aliases para exportación
+export const TablePage = getTables;
+export const deleteTable = changeTableStatus;
