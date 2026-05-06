@@ -1,5 +1,7 @@
-import { Router } from 'express';
+// C:\2022473\Proyectos 2026\Segundo Bimestre\ProyectoRestaurante\restaurant_system_admin\src\additionalService\additionalService.routes.js
+'use strict';
 
+import { Router } from 'express';
 import {
     getAdditionalServices,
     createAdditionalService,
@@ -13,25 +15,60 @@ import {
     validateAdditionalServiceStatusChange
 } from '../../middlewares/additionalService-validator.js';
 
+import { uploadAdditionalServiceImage } from '../../middlewares/file-uploader.js';
+import { validateJWT } from '../../middlewares/validate-jwt.js';
+import { hasRole } from '../../middlewares/role-validator.js';
+
 const router = Router();
 
-router.get('/', getAdditionalServices);
+/**
+ * GET - Listar
+ */
+router.get(
+    '/', 
+    [validateJWT], 
+    getAdditionalServices
+);
 
+/**
+ * POST - Crear
+ * Orden: Validar Token -> Validar Rol -> Subir Imagen -> Validar Campos -> Controlador
+ */
 router.post(
     '/',
-    validateCreateAdditionalService,
+    [
+        validateJWT,
+        hasRole('PLATFORM_ADMIN'),
+        uploadAdditionalServiceImage.single('image'),
+        validateCreateAdditionalService
+    ],
     createAdditionalService
 );
 
+/**
+ * PUT - Actualizar
+ */
 router.put(
     '/:id',
-    validateUpdateAdditionalService,
+    [
+        validateJWT,
+        hasRole('PLATFORM_ADMIN'),
+        uploadAdditionalServiceImage.single('image'),
+        validateUpdateAdditionalService
+    ],
     updateAdditionalService
 );
 
+/**
+ * PATCH - Estado (Borrado Lógico)
+ */
 router.patch(
     '/:id/status',
-    validateAdditionalServiceStatusChange,
+    [
+        validateJWT,
+        hasRole('PLATFORM_ADMIN'),
+        validateAdditionalServiceStatusChange
+    ],
     changeAdditionalServiceStatus
 );
 

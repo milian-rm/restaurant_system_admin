@@ -32,7 +32,7 @@ export const createBranch = async (req, res) => {
     const data = req.body;
 
     if (req.file) {
-      data.Photos = [{ ImgaeURL: req.file.path }];
+      data.Photos = [{ ImageURL: req.file.path }];
     }
 
     const branch = new Branch(data);
@@ -58,7 +58,7 @@ export const updateBranch = async (req, res) => {
     const data = req.body;
 
     if (req.file) {
-      data.Photos = [{ ImgaeURL: req.file.path }];
+      data.Photos = [{ ImageURL: req.file.path }];
     }
 
     const branch = await Branch.findByIdAndUpdate(id, data, {
