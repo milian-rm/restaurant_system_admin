@@ -15,7 +15,7 @@ import {
     validateAdditionalServiceStatusChange
 } from '../../middlewares/additionalService-validator.js';
 
-// 👇 1. IMPORTAR MIDDLEWARES DE SEGURIDAD 👇
+import { uploadAdditionalServiceImage } from '../../middlewares/file-uploader.js';
 import { validateJWT } from '../../middlewares/validate-jwt.js';
 import { hasRole } from '../../middlewares/role-validator.js';
 
@@ -23,7 +23,6 @@ const router = Router();
 
 /**
  * GET - Listar
- * Cualquier usuario logueado puede ver qué servicios adicionales ofrecemos
  */
 router.get(
     '/', 
@@ -33,13 +32,14 @@ router.get(
 
 /**
  * POST - Crear
- * Solo el Administrador de Plataforma puede dar de alta nuevos servicios
+ * Orden: Validar Token -> Validar Rol -> Subir Imagen -> Validar Campos -> Controlador
  */
 router.post(
     '/',
     [
         validateJWT,
         hasRole('PLATFORM_ADMIN'),
+        uploadAdditionalServiceImage.single('image'),
         validateCreateAdditionalService
     ],
     createAdditionalService
@@ -47,13 +47,13 @@ router.post(
 
 /**
  * PUT - Actualizar
- * Solo el Administrador de Plataforma puede editar precios o nombres de servicios
  */
 router.put(
     '/:id',
     [
         validateJWT,
         hasRole('PLATFORM_ADMIN'),
+        uploadAdditionalServiceImage.single('image'),
         validateUpdateAdditionalService
     ],
     updateAdditionalService
@@ -61,7 +61,6 @@ router.put(
 
 /**
  * PATCH - Estado (Borrado Lógico)
- * Solo el Administrador de Plataforma puede activar o desactivar servicios
  */
 router.patch(
     '/:id/status',
