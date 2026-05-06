@@ -1,3 +1,4 @@
+// C:\2022473\Proyectos 2026\Segundo Bimestre\ProyectoRestaurante\restaurant_system_admin\src\Coupon\coupon.routes.js
 'use strict';
 
 import { Router } from 'express';
@@ -10,20 +11,60 @@ import {
 
 import { createCouponValidator } from '../../middlewares/coupon-validator.js';
 
+// 👇 1. IMPORTAR SEGURIDAD 👇
+import { validateJWT } from '../../middlewares/validate-jwt.js';
+import { hasRole } from '../../middlewares/role-validator.js';
+
 const router = Router();
 
-// POST - Crear 
-router.post('/', [createCouponValidator], createCoupon);
-
-// GET - Listar
-router.get('/', getCoupons);
-
-// PUT - Actualizar datos generales
-router.put('/:id', updateCoupon);
+/**
+ * GET - Listar
+ * Cualquier usuario autenticado puede ver los cupones disponibles
+ */
+router.get(
+    '/', 
+    [validateJWT], 
+    getCoupons
+);
 
 /**
- * PATCH - Borrado Lógico o Desactivación
+ * POST - Crear 
+ * Solo el Administrador de la Plataforma puede generar nuevos códigos de descuento
  */
-router.patch('/:id/status', deleteCoupon);
+router.post(
+    '/', 
+    [
+        validateJWT, 
+        hasRole('PLATFORM_ADMIN'), 
+        createCouponValidator
+    ], 
+    createCoupon
+);
+
+/**
+ * PUT - Actualizar datos generales
+ * Solo el Administrador de la Plataforma puede modificar fechas o porcentajes
+ */
+router.put(
+    '/:id', 
+    [
+        validateJWT, 
+        hasRole('PLATFORM_ADMIN')
+    ], 
+    updateCoupon
+);
+
+/**
+ * PATCH - Borrado Lógico o Desactivación (Toggle Status)
+ * Solo el Administrador de la Plataforma puede activar/desactivar cupones
+ */
+router.patch(
+    '/:id/status', 
+    [
+        validateJWT, 
+        hasRole('PLATFORM_ADMIN')
+    ], 
+    deleteCoupon
+);
 
 export default router;

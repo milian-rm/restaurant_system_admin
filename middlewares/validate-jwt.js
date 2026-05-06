@@ -1,57 +1,64 @@
+// C:\2022473\Proyectos 2026\Segundo Bimestre\ProyectoRestaurante\restaurant_system_admin\middlewares\validate-jwt.js
 'use strict';
 
 import jwt from 'jsonwebtoken';
-import User from '../src/User/user.model.js';
 
 export const validateJWT = async (req, res, next) => {
-
     try {
-
-        // Obtener token
+        // 1. Obtener token
         const token =
             req.header('x-token') ||
             req.header('Authorization')?.replace('Bearer ', '');
 
         if (!token) {
             return res.status(401).json({
-                message: 'No hay token en la petición'
+                success: false,
+                message: 'No se proporcionó un token',
+                error: 'MISSING_TOKEN',
             });
         }
 
-        // Verificar token
-        const { uid } = jwt.verify(token, process.env.SECRET_KEY);
+        // 2. Verificar token
+        // El SECRET_KEY debe ser el mismo que usa el Auth-Service de C#
+        const decoded = jwt.verify(token, process.env.SECRET_KEY);
 
-        // Buscar usuario
-        const user = await User.findById(uid);
+        // Extraemos el ID y el Role que vienen inyectados desde C#
+        const userId = decoded.uid || decoded.sub || decoded.id;
+        const userRole = decoded.role || 'CLIENT';
 
-        if (!user) {
-            return res.status(401).json({
-                message: 'Token no válido - Usuario inexistente'
-            });
-        }
-
-        // Validaciones de seguridad
-        if (user.UserStatus === 'INACTIVE') {
-            return res.status(401).json({
-                message: 'Usuario inactivo'
-            });
-        }
-
-        if (user.deletedAt) {
-            return res.status(401).json({
-                message: 'Usuario eliminado'
-            });
-        }
-
-        // Adjuntar usuario a la request
-        req.user = user;
+        // 3. Adjuntamos los datos al objeto request
+        // Saltamos la búsqueda en MongoDB porque los IDs de C# (usr_...) 
+        // rompen el formato de ObjectId de Mongo.
+        req.user = {
+            id: userId,
+            role: userRole
+        };
 
         next();
 
     } catch (error) {
+        console.error('Error de validación JWT:', error.message);
 
-        return res.status(401).json({
-            message: 'Token no válido o expirado'
+        if (error.name === 'TokenExpiredError') {
+            return res.status(401).json({
+                success: false,
+                message: 'El token ha expirado',
+                error: 'TOKEN_EXPIRED',
+            });
+        }
+
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({
+                success: false,
+                message: 'Token inválido o malformado',
+                error: 'INVALID_TOKEN',
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            message: 'Error interno al validar el token',
+            error: 'TOKEN_VALIDATION_ERROR',
         });
     }
 };
