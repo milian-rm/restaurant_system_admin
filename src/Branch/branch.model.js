@@ -63,7 +63,7 @@ const branchSchema = new mongoose.Schema({
         default: 'ACTIVE'
     },
     Photos: [{
-        ImgaeURL: {
+        ImageURL: {
             type: String,
             default: 'branches/restaurant_generic'
         }
