@@ -3,11 +3,10 @@
 import Event from './event.model.js';
 import Table from '../Table/table.model.js';
 
-// Ver eventos
+// 1. Ver eventos (Paginado y Filtrado)
 export const getEvents = async (req, res) => {
   try {
     const { page = 1, limit = 10, status, branchId } = req.query;
-
     const filter = {};
 
     if (branchId) filter.branchId = branchId;
@@ -43,27 +42,20 @@ export const getEvents = async (req, res) => {
   }
 };
 
-// Obtener evento por ID
+// 2. Obtener evento por ID
 export const getEventById = async (req, res) => {
   try {
     const { id } = req.params;
-
     const event = await Event.findById(id)
       .populate('branchId')
       .populate('clientId')
       .populate('tables');
 
     if (!event) {
-      return res.status(404).json({
-        success: false,
-        message: 'Evento no encontrado'
-      });
+      return res.status(404).json({ success: false, message: 'Evento no encontrado' });
     }
 
-    return res.status(200).json({
-      success: true,
-      data: event
-    });
+    return res.status(200).json({ success: true, data: event });
 
   } catch (error) {
     return res.status(500).json({
@@ -74,18 +66,14 @@ export const getEventById = async (req, res) => {
   }
 };
 
-// Actualizar evento
+// 3. Actualizar evento (Fix para que funcione el CancelEvent del frontend)
 export const updateEvent = async (req, res) => {
   try {
     const { id } = req.params;
-
     const existing = await Event.findById(id);
 
     if (!existing) {
-      return res.status(404).json({
-        success: false,
-        message: 'Evento no encontrado'
-      });
+      return res.status(404).json({ success: false, message: 'Evento no encontrado' });
     }
 
     const event = await Event.findByIdAndUpdate(id, req.body, {
@@ -111,19 +99,15 @@ export const updateEvent = async (req, res) => {
   }
 };
 
-// Cambiar estado del evento
+// 4. Cambiar estado del evento
 export const changeEventStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
-
     const event = await Event.findById(id);
 
     if (!event) {
-      return res.status(404).json({
-        success: false,
-        message: 'Evento no encontrado'
-      });
+      return res.status(404).json({ success: false, message: 'Evento no encontrado' });
     }
 
     event.status = status;
@@ -144,19 +128,15 @@ export const changeEventStatus = async (req, res) => {
   }
 };
 
-// Iniciar o finalizar evento
+// 5. Iniciar o finalizar evento (Manejo de Mesas)
 export const toggleEventAttendance = async (req, res) => {
   try {
     const { id } = req.params;
     const { action } = req.body;
-
     const event = await Event.findById(id);
 
     if (!event) {
-      return res.status(404).json({
-        success: false,
-        message: 'Evento no encontrado'
-      });
+      return res.status(404).json({ success: false, message: 'Evento no encontrado' });
     }
 
     let newTableStatus;
@@ -169,10 +149,7 @@ export const toggleEventAttendance = async (req, res) => {
       newTableStatus = 'Disponible';
       newEventStatus = 'Finalizado';
     } else {
-      return res.status(400).json({
-        success: false,
-        message: 'Acción no válida. Use INICIAR o FINALIZAR'
-      });
+      return res.status(400).json({ success: false, message: 'Acción no válida' });
     }
 
     await Table.updateMany(
@@ -185,51 +162,33 @@ export const toggleEventAttendance = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Evento ${action === 'INICIAR' ? 'iniciado' : 'finalizado'} con éxito. Mesas marcadas como ${newTableStatus}.`,
-      data: {
-        eventStatus: event.status,
-        tablesUpdated: event.tables.length
-      }
+      message: `Evento ${action === 'INICIAR' ? 'iniciado' : 'finalizado'} con éxito.`,
+      data: { eventStatus: event.status, tablesUpdated: event.tables.length }
     });
 
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Error al gestionar la asistencia del evento',
+      message: 'Error al gestionar la asistencia',
       error: error.message
     });
   }
 };
 
-// Crear evento
+// 6. Crear evento con lógica de asignación de mesas
 export const createEvent = async (req, res) => {
   try {
-    const {
-      branchId,
-      clientId,
-      name,
-      additionalServices,
-      eventDate,
-      startTime,
-      endTime,
-      numberOfPersons,
-      notes
-    } = req.body;
-
+    const { branchId, clientId, name, eventDate, startTime, endTime, numberOfPersons, notes } = req.body;
     const dateFilter = new Date(eventDate);
 
     const overlappingEvents = await Event.find({
       branchId,
       eventDate: dateFilter,
       status: { $ne: 'Cancelado' },
-      $or: [
-        { startTime: { $lt: endTime }, endTime: { $gt: startTime } }
-      ]
+      $or: [ { startTime: { $lt: endTime }, endTime: { $gt: startTime } } ]
     }).select('tables');
 
-    const occupiedTableIds = overlappingEvents.flatMap(event =>
-      event.tables.map(t => t.toString())
-    );
+    const occupiedTableIds = overlappingEvents.flatMap(event => event.tables.map(t => t.toString()));
 
     const availableTables = await Table.find({
       branchId,
@@ -254,16 +213,13 @@ export const createEvent = async (req, res) => {
       if (accumulatedCapacity < numberOfPersons) {
         assignedTables.push(table._id);
         accumulatedCapacity += table.capacity;
-      } else {
-        break;
-      }
+      } else { break; }
     }
 
     const newEvent = new Event({
       branchId,
       clientId,
       name,
-      additionalServices,
       eventDate: dateFilter,
       startTime,
       endTime,
@@ -274,16 +230,32 @@ export const createEvent = async (req, res) => {
 
     await newEvent.save();
 
-    return res.status(201).json({
+    return res.status(201).json({ success: true, message: 'Evento creado correctamente', data: newEvent });
+
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Error al crear evento', error: error.message });
+  }
+};
+
+// 7. ELIMINACIÓN FÍSICA (FIX FUNDAMENTAL)
+export const deleteEventPermanently = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const eventDeleted = await Event.findByIdAndDelete(id);
+
+    if (!eventDeleted) {
+      return res.status(404).json({ success: false, message: 'El evento no existe' });
+    }
+
+    return res.status(200).json({
       success: true,
-      message: 'Evento creado correctamente',
-      data: newEvent
+      message: 'Evento eliminado físicamente de la base de datos'
     });
 
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Error al crear evento',
+      message: 'Error al eliminar permanentemente',
       error: error.message
     });
   }

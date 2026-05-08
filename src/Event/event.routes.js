@@ -1,14 +1,14 @@
 'use strict';
 
 import { Router } from 'express';
-
 import {
   getEvents,
   getEventById,
   updateEvent,
   changeEventStatus,
   toggleEventAttendance,
-  createEvent
+  createEvent,
+  deleteEventPermanently 
 } from './event.controller.js';
 
 import {
@@ -18,40 +18,27 @@ import {
   validateCreateEvent
 } from '../../middlewares/event-validator.js';
 
+// MIDDLEWARES DE SEGURIDAD
+import { validateJWT } from '../../middlewares/validate-jwt.js';
+import { hasRole } from '../../middlewares/role-validator.js';
+
 const router = Router();
 
-router.get(
-  '/',
-  getEvents
-);
+// Todos los logueados pueden ver eventos
+router.get('/', [validateJWT], getEvents);
 
-router.get(
-  '/:id',
-  validateGetEventById,
-  getEventById
-);
+router.get('/:id', [validateJWT, validateGetEventById], getEventById);
 
-router.put(
-  '/:id',
-  validateUpdateEventRequest,
-  updateEvent
-);
+// Solo Admins pueden Crear/Editar/Borrar
+router.post('/', [validateJWT, hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN'), validateCreateEvent], createEvent);
 
-router.patch(
-  '/:id/status',
-  validateEventStatusChange,
-  changeEventStatus
-);
+router.put('/:id', [validateJWT, hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN'), validateUpdateEventRequest], updateEvent);
 
-router.patch(
-  '/:id/attendance',
-  toggleEventAttendance
-);
+router.patch('/:id/status', [validateJWT, hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN'), validateEventStatusChange], changeEventStatus);
 
-router.post(
-  '/',
-  validateCreateEvent,
-  createEvent
-);
+router.patch('/:id/attendance', [validateJWT, hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN')], toggleEventAttendance);
+
+// Ruta para el borrado definitivo
+router.delete('/:id', [validateJWT, hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN')], deleteEventPermanently);
 
 export default router;
