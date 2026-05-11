@@ -10,7 +10,7 @@ export const saveInventory = async (req, res) => {
         const data = req.body;
 
         const inventory = new Inventory(data);
-        await inventory.save();
+        await inventory.populate('branchId', 'name');
 
         return res.status(201).send({
             success: true,
@@ -39,7 +39,9 @@ export const getInventory = async (req, res) => {
         if (branchId) filter.branchId = branchId;
         if (status) filter.status = status;
 
-        const items = await Inventory.find(filter).sort({ createdAt: -1 });
+        const items = await Inventory.find(filter)
+        .populate('branchId', 'name')
+        .sort({ createdAt: -1 });
 
         return res.send({
             success: true,
@@ -66,7 +68,7 @@ export const updateInventory = async (req, res) => {
         const updatedItem = await Inventory.findByIdAndUpdate(id, data, {
             new: true,
             runValidators: true
-        });
+        }).populate;
 
         if (!updatedItem) {
             return res.status(404).send({
@@ -118,7 +120,7 @@ export const deleteInventory = async (req, res) => {
             {
                 new: true
             }
-        );
+        ).populate('branchId', 'name');
 
         return res.send({
             success: true,

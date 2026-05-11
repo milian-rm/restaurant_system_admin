@@ -1,3 +1,6 @@
+// C:\2022473\Proyectos 2026\Segundo Bimestre\ProyectoRestaurante\restaurant_system_admin\src\Inventory\inventory.routes.js
+'use strict';
+
 import { Router } from 'express';
 import {
     saveInventory,
@@ -11,15 +14,60 @@ import {
     updateInventoryValidator
 } from '../../middlewares/inventory-validator.js';
 
+import { validateJWT } from '../../middlewares/validate-jwt.js';
+import { hasRole } from '../../middlewares/role-validator.js';
+
 const api = Router();
 
-api.post('/', inventoryValidator, saveInventory);
+/**
+ * GET - Listar Inventario
+ * El personal logueado (como cocineros o administradores) necesita ver qué hay en stock.
+ */
+api.get(
+    '/', 
+    [validateJWT], 
+    getInventory
+);
 
-api.get('/', getInventory);
+/**
+ * POST - Registrar Insumo
+ * Solo los administradores pueden ingresar nuevas materias primas al sistema.
+ */
+api.post(
+    '/', 
+    [
+        validateJWT,
+        hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN'),
+        inventoryValidator
+    ], 
+    saveInventory
+);
 
-// Vamos a usar el estándar: solo el ID para editar y eliminar
-api.put('/:id', updateInventoryValidator, updateInventory);
+/**
+ * PUT - Actualizar Insumo
+ * Para cuando cambia el costo unitario o hacen ajustes manuales de stock.
+ */
+api.put(
+    '/:id', 
+    [
+        validateJWT,
+        hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN'),
+        updateInventoryValidator
+    ], 
+    updateInventory
+);
 
-api.patch('/:id/status', deleteInventory);
+/**
+ * PATCH - Cambiar Estado (Soft Delete)
+ * Para descontinuar un insumo (ej. ya no vendemos X marca de gaseosa).
+ */
+api.patch(
+    '/:id/status', 
+    [
+        validateJWT,
+        hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN')
+    ], 
+    deleteInventory
+);
 
 export default api;

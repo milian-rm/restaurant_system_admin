@@ -3,6 +3,7 @@
 import Reservation from './reservation.model.js';
 import Table from '../Table/table.model.js';
 import Event from '../Event/event.model.js';
+import User from '../User/user.model.js';
 
 /**
  * POST - Crear reservación
@@ -18,6 +19,13 @@ export const saveReservation = async (req, res) => {
             clientId
         } = req.body;
 
+        const client = await User.findById(clientId);
+        if (!client || client.UserStatus === 'INACTIVE') {
+            return res.status(400).send({
+                success: false,
+                message: 'No se puede crear la reserva: El cliente no existe o está desactivado.'
+            });
+        }
         if (!clientId) {
             return res.status(400).send({
                 success: false,
@@ -78,13 +86,18 @@ export const saveReservation = async (req, res) => {
 
         await reservation.save();
 
+        const populatedRes = await Reservation.findById(reservation._id)
+            .populate('branchId', 'name')
+            .populate('tableId', 'numberTable capacity')
+            .populate('clientId', 'UserName UserSurname email');
+
         return res.status(201).send({
             success: true,
             message: 'Reservación creada exitosamente',
             assignedTable: {
                 number: bestTable.numberTable
             },
-            data: reservation
+            data: populatedRes
         });
 
     } catch (err) {
@@ -143,9 +156,23 @@ export const updateReservation = async (req, res) => {
             });
         }
 
-        const updated = await Reservation.findByIdAndUpdate(id, data, {
-            new: true
-        });
+        if (data.numberOfPersons !== reservation.numberOfPersons || data.date !== reservation.date || data.time !== reservation.time) {
+            
+            // Aquí podrías reutilizar la lógica de "bestTable" para ver si aún cabe 
+            // o si hay que asignarle otra mesa. Por simplicidad inmediata, validamos capacidad:
+            const currentTable = await Table.findById(reservation.tableId);
+            if (data.numberOfPersons > currentTable.capacity) {
+                return res.status(400).send({
+                    success: false,
+                    message: `La mesa asignada (#${currentTable.numberTable}) solo tiene capacidad para ${currentTable.capacity} personas. No puedes subir a ${data.numberOfPersons}.`
+                });
+            }
+        }
+
+        const updated = await Reservation.findByIdAndUpdate(id, data, {new: true})
+        .populate('branchId', 'name')
+        .populate('tableId', 'numberTable capacity')
+        .populate('clientId', 'UserName UserSurname email');
 
         return res.send({
             success: true,
