@@ -1,48 +1,14 @@
 'use strict';
 
 import { Router } from 'express';
-import {
-    createOrderDetail,
-    getOrderDetailsByOrder,
-    updateOrderDetail,
-    deleteOrderDetail
-} from './orderDetail.controller.js';
-
-import {
-    validateCreateOrderDetail,
-    validateUpdateOrderDetail,
-    validateOrderIdParam,
-    validateOrderDetailIdParam
-} from '../../middlewares/orderDetail-validator.js';
+import { createOrderDetail, getOrderDetailsByOrder, updateOrderDetail, deleteOrderDetail } from './orderDetail.controller.js';
+import { validateJWT } from '../../middlewares/validate-jwt.js';
 
 const router = Router();
 
-// Crear item de orden
-router.post(
-    '/',
-    validateCreateOrderDetail,
-    createOrderDetail
-);
-
-// Obtener items por orden
-router.get(
-    '/order/:orderId',
-    validateOrderIdParam,
-    getOrderDetailsByOrder
-);
-
-// Actualizar item
-router.put(
-    '/:id',
-    validateUpdateOrderDetail,
-    updateOrderDetail
-);
-
-// Eliminar item
-router.delete(
-    '/:id',
-    validateOrderDetailIdParam,
-    deleteOrderDetail
-);
+router.post('/', [validateJWT], createOrderDetail);
+router.get('/order/:orderId', [validateJWT], getOrderDetailsByOrder);
+router.put('/:id', [validateJWT], updateOrderDetail);
+router.delete('/:id', [validateJWT], deleteOrderDetail);
 
 export default router;

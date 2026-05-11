@@ -1,3 +1,6 @@
+// C:\2022473\Proyectos 2026\Segundo Bimestre\ProyectoRestaurante\restaurant_system_admin\src\Combo\combo.routes.js
+'use strict';
+
 import { Router } from 'express';
 import {
     getCombos,
@@ -6,6 +9,10 @@ import {
     updateCombo,
     changeComboStatus
 } from './combo.controller.js';
+
+// MIDDLEWARES DE SEGURIDAD
+import { validateJWT } from '../../middlewares/validate-jwt.js';
+import { hasRole } from '../../middlewares/role-validator.js';
 
 import {
     validateCreateCombo,
@@ -16,32 +23,27 @@ import {
 
 const router = Router();
 
-router.get(
-    '/',
-    getCombos
-);
+// Todos pueden ver los combos
+router.get('/', [validateJWT], getCombos);
 
-router.get(
-    '/:id',
-    validateGetComboById,
-    getComboById
-);
+router.get('/:id', [validateJWT, validateGetComboById], getComboById);
 
+// Solo administradores pueden gestionar la oferta
 router.post(
-    '/',
-    validateCreateCombo,
+    '/', 
+    [validateJWT, hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN'), validateCreateCombo], 
     createCombo
 );
 
 router.put(
-    '/:id',
-    validateUpdateComboRequest,
+    '/:id', 
+    [validateJWT, hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN'), validateUpdateComboRequest], 
     updateCombo
 );
 
 router.patch(
-    '/:id/status',
-    validateComboStatusChange,
+    '/:id/status', 
+    [validateJWT, hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN'), validateComboStatusChange], 
     changeComboStatus
 );
 

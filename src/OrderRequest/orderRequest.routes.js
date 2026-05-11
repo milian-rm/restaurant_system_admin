@@ -1,32 +1,12 @@
 'use strict';
 
 import { Router } from 'express';
-import {
-    getBranchOrderRequests,
-    updateOrderRequestStatus
-} from './orderRequest.controller.js';
-
-import {
-    validateUpdateOrderRequestStatus
-} from '../../middlewares/orderRequest-validator.js';
+import { getBranchOrderRequests, updateOrderRequestStatus } from './orderRequest.controller.js';
+import { validateJWT } from '../../middlewares/validate-jwt.js';
 
 const router = Router();
 
-/**
- * PERSONAL RESTAURANTE
- */
-
-// Ver pedidos por sucursal
-router.get(
-    '/branch/:branchId',
-    getBranchOrderRequests
-);
-
-// Cambiar estado del pedido
-router.patch(
-    '/:id/status',
-    validateUpdateOrderRequestStatus,
-    updateOrderRequestStatus
-);
+router.get('/branch/:branchId', [validateJWT], getBranchOrderRequests);
+router.patch('/:id/status', [validateJWT], updateOrderRequestStatus);
 
 export default router;
