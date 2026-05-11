@@ -47,10 +47,6 @@ export const validateCreateBranch = [
         .optional()
         .isBoolean().withMessage('El Auto-servicio debe ser verdadero o falso'),
 
-    body('AveragePrices')
-        .notEmpty().withMessage('El precio promedio es requerido')
-        .isFloat({ min: 1.00 }).withMessage('El precio promedio debe ser mayor a Q1.00'),
-
     body('OpenedAt')
         .optional()
         .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Formato de apertura inválido (HH:mm)'),
@@ -77,7 +73,6 @@ export const validateUpdateBranch = [
     body('Email').optional().isEmail().withMessage('Debe ser un correo válido').normalizeEmail(),
     body('tableCapacity').optional().isInt({ min: 0, max: 500 }).withMessage('Capacidad inválida'),
     body('Category').optional().isIn(categories).withMessage('Categoría no válida'),
-    body('AveragePrices').optional().isFloat({ min: 1.00 }).withMessage('El precio promedio debe ser mayor a Q1.00'),
     body('OpenedAt').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Formato inválido (HH:mm)'),
     body('ClosedAt').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Formato inválido (HH:mm)'),
     body('branchStatus').optional().isIn(branchStatuses).withMessage('Estado inválido'),

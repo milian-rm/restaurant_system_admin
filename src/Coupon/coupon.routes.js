@@ -11,7 +11,6 @@ import {
 
 import { createCouponValidator } from '../../middlewares/coupon-validator.js';
 
-// 👇 1. IMPORTAR SEGURIDAD 👇
 import { validateJWT } from '../../middlewares/validate-jwt.js';
 import { hasRole } from '../../middlewares/role-validator.js';
 

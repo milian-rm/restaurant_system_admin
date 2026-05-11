@@ -31,6 +31,30 @@ export const getBranchReviews = async (req, res) => {
     }
 };
 
+/* -----------------------------------------
+   OBTENER TODAS LAS RESEÑAS (PANEL ADMIN GLOBAL)
+------------------------------------------*/
+export const getAllReviews = async (req, res) => {
+    try {
+        // Solo traemos las reseñas, el filtro de "Ocultas" lo hace el frontend en las pestañas
+        const reviews = await Review.find()
+            .populate('customer', 'UserName UserSurname uid')
+            .populate('branch', 'name')
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            data: reviews
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error al obtener todas las reseñas',
+            error: error.message
+        });
+    }
+};
+
 
 /* -----------------------------------------
    ELIMINAR / RESTAURAR RESEÑA SOFT DELETE

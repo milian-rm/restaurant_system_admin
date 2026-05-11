@@ -68,7 +68,7 @@ export const updateInventory = async (req, res) => {
         const updatedItem = await Inventory.findByIdAndUpdate(id, data, {
             new: true,
             runValidators: true
-        }).populate;
+        }).populate('branchId', 'name');
 
         if (!updatedItem) {
             return res.status(404).send({

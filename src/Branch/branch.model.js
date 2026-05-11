@@ -42,11 +42,6 @@ const branchSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
-    AveragePrices: {
-        type: Number,
-        default: 0.00,
-        required: true
-    },
     OpenedAt: {
         type: String,
         default: '06:00',

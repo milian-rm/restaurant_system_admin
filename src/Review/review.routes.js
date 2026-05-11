@@ -1,36 +1,26 @@
 'use strict';
 
 import { Router } from 'express';
-import { getBranchReviews, deleteReview } from './review.controller.js';
+import { getBranchReviews, deleteReview, getAllReviews } from './review.controller.js'; // 👈 Importas la nueva función
 import { validateDeleteReview } from '../../middlewares/review-validator.js';
-
-// IMPORTAR SEGURIDAD
 import { validateJWT } from '../../middlewares/validate-jwt.js';
 import { hasRole } from '../../middlewares/role-validator.js';
 
 const router = Router();
 
-/**
- * GET - Ver reseñas por sucursal
- * Cualquier usuario autenticado puede ver el feedback
- */
+// NUEVA: Ver todas las reseñas (Para el Dashboard Global)
 router.get(
-    '/branch/:branchId',
-    [validateJWT], 
-    getBranchReviews
+    '/',
+    [validateJWT, hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN')],
+    getAllReviews
 );
 
-/**
- * PATCH - Soft Delete / Moderación
- * Solo administradores (Plataforma o Sucursal) pueden ocultar reseñas
- */
+// Las que ya tenías...
+router.get('/branch/:branchId', [validateJWT], getBranchReviews);
+
 router.patch(
     '/:id/status',
-    [
-        validateJWT,
-        hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN'),
-        validateDeleteReview
-    ],
+    [validateJWT, hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN'), validateDeleteReview],
     deleteReview
 );
 
