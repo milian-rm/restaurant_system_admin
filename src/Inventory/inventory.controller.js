@@ -10,6 +10,9 @@ export const saveInventory = async (req, res) => {
         const data = req.body;
 
         const inventory = new Inventory(data);
+
+        await inventory.save(); 
+
         await inventory.populate('branchId', 'name');
 
         return res.status(201).send({

@@ -3,6 +3,7 @@
 export const hasRole = (...roles) => {
 
     return (req, res, next) => {
+        console.log("Rol del usuario logueado:", req.user.role);
 
         if (!req.user) {
             return res.status(500).json({
@@ -15,7 +16,6 @@ export const hasRole = (...roles) => {
                 message: `Acceso denegado. Roles permitidos: ${roles.join(', ')}`
             });
         }
-
         next();
     };
 };

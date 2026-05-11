@@ -1,7 +1,7 @@
-'use strict';
+"use strict";
 
-import Combo from './combo.model.js';
-import Product from '../Product/product.model.js';
+import Combo from "./combo.model.js";
+import Product from "../Product/product.model.js";
 
 // Obtener combos
 export const getCombos = async (req, res) => {
@@ -14,8 +14,8 @@ export const getCombos = async (req, res) => {
 
     const combos = await Combo.find(filter)
       .populate({
-        path: 'ComboList.productId',
-        select: 'nombre precio categoria estado'
+        path: "ComboList.productId",
+        select: "nombre precio categoria estado",
       })
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
@@ -30,15 +30,14 @@ export const getCombos = async (req, res) => {
         currentPage: parseInt(page),
         totalPages: Math.ceil(total / parseInt(limit)),
         totalRecords: total,
-        limit: parseInt(limit)
-      }
+        limit: parseInt(limit),
+      },
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Error al obtener los combos',
-      error: error.message
+      message: "Error al obtener los combos",
+      error: error.message,
     });
   }
 };
@@ -49,27 +48,26 @@ export const getComboById = async (req, res) => {
     const { id } = req.params;
 
     const combo = await Combo.findById(id).populate({
-      path: 'ComboList.productId',
-      select: 'nombre precio categoria imagen_url estado'
+      path: "ComboList.productId",
+      select: "nombre precio categoria imagen_url estado",
     });
 
     if (!combo) {
       return res.status(404).json({
         success: false,
-        message: 'Combo no encontrado'
+        message: "Combo no encontrado",
       });
     }
 
     return res.status(200).json({
       success: true,
-      data: combo
+      data: combo,
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Error al obtener el combo',
-      error: error.message
+      message: "Error al obtener el combo",
+      error: error.message,
     });
   }
 };
@@ -77,36 +75,68 @@ export const getComboById = async (req, res) => {
 // Crear combo
 export const createCombo = async (req, res) => {
   try {
-    const comboData = req.body;
+    const {
+      ComboName,
+      ComboDescription,
+      ComboList,
+      ComboDiscount = 0,
+      ComboStatus,
+    } = req.body;
 
-    if (comboData.ComboList && comboData.ComboList.length > 0) {
-      for (const item of comboData.ComboList) {
-        const productExists = await Product.findById(item.productId);
-
-        if (!productExists) {
-          return res.status(404).json({
-            success: false,
-            message: `El producto con ID ${item.productId} no existe`
-          });
-        }
-      }
+    if (!ComboList || ComboList.length === 0) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "El combo debe tener al menos un producto",
+        });
     }
 
-    const combo = new Combo(comboData);
+    // Calcular precio total sumando precio * cantidad de cada producto
+    let totalBruto = 0;
+    for (const item of ComboList) {
+      const product = await Product.findById(item.productId);
+      if (!product) {
+        return res
+          .status(404)
+          .json({
+            success: false,
+            message: `El producto con ID ${item.productId} no existe`,
+          });
+      }
+      totalBruto += product.precio * item.cantidad;
+    }
+
+    // Aplicar descuento: si pones 10, descuenta 10%
+    const descuento = Number(ComboDiscount) || 0;
+    const ComboPrice = parseFloat(
+      (totalBruto * (1 - descuento / 100)).toFixed(2),
+    );
+
+    const combo = new Combo({
+      ComboName,
+      ComboDescription,
+      ComboList,
+      ComboDiscount: descuento,
+      ComboPrice, // calculado, no viene del cliente
+      ...(ComboStatus && { ComboStatus }),
+    });
+
     await combo.save();
 
     return res.status(201).json({
       success: true,
-      message: 'Combo creado exitosamente',
-      data: combo
+      message: "Combo creado exitosamente",
+      data: combo,
     });
-
   } catch (error) {
-    return res.status(400).json({
-      success: false,
-      message: 'Error al crear el combo',
-      error: error.message
-    });
+    return res
+      .status(400)
+      .json({
+        success: false,
+        message: "Error al crear el combo",
+        error: error.message,
+      });
   }
 };
 
@@ -120,7 +150,7 @@ export const updateCombo = async (req, res) => {
       if (data.ComboList.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'El combo no puede quedarse sin productos'
+          message: "El combo no puede quedarse sin productos",
         });
       }
 
@@ -130,7 +160,7 @@ export const updateCombo = async (req, res) => {
         if (!productExists) {
           return res.status(404).json({
             success: false,
-            message: `El producto con ID ${item.productId} no existe`
+            message: `El producto con ID ${item.productId} no existe`,
           });
         }
       }
@@ -138,27 +168,26 @@ export const updateCombo = async (req, res) => {
 
     const combo = await Combo.findByIdAndUpdate(id, data, {
       new: true,
-      runValidators: true
-    }).populate('ComboList.productId', 'nombre precio');
+      runValidators: true,
+    }).populate("ComboList.productId", "nombre precio");
 
     if (!combo) {
       return res.status(404).json({
         success: false,
-        message: 'Combo no encontrado'
+        message: "Combo no encontrado",
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Combo actualizado y validado exitosamente',
-      data: combo
+      message: "Combo actualizado y validado exitosamente",
+      data: combo,
     });
-
   } catch (error) {
     return res.status(400).json({
       success: false,
-      message: 'Error al actualizar el combo',
-      error: error.message
+      message: "Error al actualizar el combo",
+      error: error.message,
     });
   }
 };
@@ -173,26 +202,25 @@ export const changeComboStatus = async (req, res) => {
     if (!combo) {
       return res.status(404).json({
         success: false,
-        message: 'Combo no encontrado'
+        message: "Combo no encontrado",
       });
     }
 
-    combo.ComboStatus = combo.ComboStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-    combo.deletedAt = combo.ComboStatus === 'INACTIVE' ? new Date() : null;
+    combo.ComboStatus = combo.ComboStatus === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+    combo.deletedAt = combo.ComboStatus === "INACTIVE" ? new Date() : null;
 
     await combo.save();
 
     return res.status(200).json({
       success: true,
-      message: `Combo ${combo.ComboStatus === 'ACTIVE' ? 'activado' : 'desactivado'} exitosamente`,
-      data: combo
+      message: `Combo ${combo.ComboStatus === "ACTIVE" ? "activado" : "desactivado"} exitosamente`,
+      data: combo,
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Error al cambiar el estado del combo',
-      error: error.message
+      message: "Error al cambiar el estado del combo",
+      error: error.message,
     });
   }
 };

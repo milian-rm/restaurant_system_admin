@@ -16,16 +16,10 @@ export const validateCreateCombo = [
         .isLength({ max: 100 })
         .withMessage('La descripción no puede tener más de 100 caracteres'),
 
-    body('ComboPrice')
-        .notEmpty()
-        .withMessage('El precio es requerido')
-        .isNumeric()
-        .withMessage('El precio debe ser un número válido'),
-
     body('ComboDiscount')
-        .trim()
-        .notEmpty()
-        .withMessage('El descuento es requerido'),
+        .optional()
+        .isFloat({ min: 0, max: 100 })
+        .withMessage('El descuento debe ser un número entre 0 y 100'),
 
     body('ComboStatus')
         .optional()

@@ -6,7 +6,8 @@ import {
     getBillings,
     getBillingById,
     createBilling,
-    payBilling
+    payBilling,
+    syncBillingWithOrder
 } from './billing.controller.js';
 
 // IMPORTAR SEGURIDAD
@@ -59,6 +60,12 @@ router.patch(
     '/pay/:id', 
     [validateJWT, hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN'), validateBillingPay], 
     payBilling
+);
+
+router.patch(
+    '/sync/:orderId',
+    [validateJWT, hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN')],
+    syncBillingWithOrder
 );
 
 export default router;
