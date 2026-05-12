@@ -77,6 +77,10 @@ export const uploadBranchImage = createCloudinaryUploader(
 export const uploadAdditionalServiceImage = createCloudinaryUploader(
     process.env.CLOUDINARY_FOLDER || 'restaurantSystem/additionalServices'
 );
+
+export const uploadComboImage = createCloudinaryUploader(
+    process.env.CLOUDINARY_FOLDER || 'restaurantSystem/combos'
+)
 // ----------------------------------------------------------------------------------------------------------
 
 // Export cloudinary instance para usar en delete-file-on-error

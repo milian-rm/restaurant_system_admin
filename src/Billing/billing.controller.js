@@ -85,7 +85,6 @@ export const createBilling = async (req, res) => {
     const {
       Order: orderId,
       BillPaymentMethod,
-      BillSerie,
       clientId,
       newClientData,
     } = req.body;
@@ -110,6 +109,7 @@ export const createBilling = async (req, res) => {
 
     let finalClientId = clientId;
 
+    // 1. Si mandan datos de cliente nuevo, lo creamos
     if (!clientId && newClientData) {
       const userExists = await User.findOne({
         UserEmail: newClientData.UserEmail.toLowerCase(),
@@ -124,17 +124,22 @@ export const createBilling = async (req, res) => {
           role: "CLIENT",
           isVerified: true,
         });
-
         finalClientId = newUser._id;
       }
     }
 
     if (!finalClientId) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Debe proporcionar un clientId o datos para crear uno en newClientData",
-      });
+      const cfUser = await User.findOne({ UserEmail: 'cf@kinal.edu.gt' });
+      
+      if (cfUser) {
+        finalClientId = cfUser._id;
+      } else {
+        // Por si olvidaste correr la función de inicio que crea el CF
+        return res.status(500).json({
+          success: false,
+          message: "Error crítico: El usuario Consumidor Final (CF) no existe en la base de datos.",
+        });
+      }
     }
 
     const total = Number(order.total || 0);
@@ -145,11 +150,10 @@ export const createBilling = async (req, res) => {
       branchId: order.branchId,
       client: finalClientId,
       Order: orderId,
-      BillSerie: BillSerie || `FAC-${Date.now()}`,
       BillSubtotal: Number(subtotal.toFixed(2)),
       BillIVA: Number(iva.toFixed(2)),
       BillTotal: Number(total.toFixed(2)),
-      BillPaymentMethod,
+      BillPaymentMethod: BillPaymentMethod || "CASH",
       BillStatus: "GENERATED",
       BillDate: new Date(),
     });
@@ -167,13 +171,13 @@ export const createBilling = async (req, res) => {
     });
   }
 };
-
 /**
  * Pagar factura y liberar mesa
  */
 export const payBilling = async (req, res) => {
   try {
     const { id } = req.params;
+    const { clientId, newClientData } = req.body;
 
     const billing = await Billing.findById(id).populate("Order");
 
@@ -190,6 +194,30 @@ export const payBilling = async (req, res) => {
         message: "La factura ya fue pagada",
       });
     }
+
+    let finalClientId = billing.client; // Si no mandan nada, se queda con el CF
+
+    if (clientId) {
+      finalClientId = clientId;
+    } else if (newClientData && newClientData.UserEmail) {
+      const userExists = await User.findOne({
+        UserEmail: newClientData.UserEmail.toLowerCase(),
+      });
+
+      if (userExists) {
+        finalClientId = userExists._id;
+      } else {
+        const newUser = await User.create({
+          ...newClientData,
+          password: "Password123!",
+          role: "CLIENT",
+          isVerified: true,
+        });
+        finalClientId = newUser._id;
+      }
+    }
+
+    billing.client = finalClientId;
 
     const order = billing.Order?._id
       ? await Order.findById(billing.Order._id)
@@ -219,7 +247,7 @@ export const payBilling = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Factura pagada, mesa liberada y orden entregada",
+      message: "Factura pagada, mesa liberada, orden entregada y cliente actualizado",
       data: billing,
     });
   } catch (error) {

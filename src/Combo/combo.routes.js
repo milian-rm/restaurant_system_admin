@@ -11,6 +11,7 @@ import {
 } from './combo.controller.js';
 
 // MIDDLEWARES DE SEGURIDAD
+import { uploadComboImage } from '../../middlewares/file-uploader.js';
 import { validateJWT } from '../../middlewares/validate-jwt.js';
 import { hasRole } from '../../middlewares/role-validator.js';
 
@@ -31,13 +32,13 @@ router.get('/:id', [validateJWT, validateGetComboById], getComboById);
 // Solo administradores pueden gestionar la oferta
 router.post(
     '/', 
-    [validateJWT, hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN'), validateCreateCombo], 
+    [validateJWT, hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN'), uploadComboImage.single('image'), validateCreateCombo], 
     createCombo
 );
 
 router.put(
     '/:id', 
-    [validateJWT, hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN'), validateUpdateComboRequest], 
+    [validateJWT, hasRole('PLATFORM_ADMIN', 'BRANCH_ADMIN'), uploadComboImage.single('image'), validateUpdateComboRequest], 
     updateCombo
 );
 

@@ -67,6 +67,26 @@ const routes = (app) => {
 
 }
 
+export const initDefaultConfig = async () => {
+    try {
+        const cfExists = await User.findOne({ UserEmail: 'cf@kinal.edu.gt' });
+        if (!cfExists) {
+            await User.create({
+                UserName: 'Consumidor',
+                UserSurname: 'Final',
+                UserEmail: 'cf@kinal.edu.gt',
+                UserPassword: 'Password123!',
+                UserPhone: '00000000',
+                role: 'CLIENT',
+                status: true
+            });
+            console.log(" Usuario CF creado exitosamente");
+        }
+    } catch (error) {
+        console.error(" Error al crear usuario por defecto:", error);
+    }
+};
+
 const initServer = async () => {
     const app = express();
     const PORT = process.env.PORT || 3001;

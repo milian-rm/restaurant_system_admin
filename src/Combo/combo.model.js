@@ -46,13 +46,17 @@ const comboSchema = new mongoose.Schema({
         enum: ['ACTIVE', 'INACTIVE'],
         default: 'ACTIVE'
     },
+    image: {
+        url: { type: String, default: null },
+        public_id: { type: String, default: null }
+    },
     deletedAt: {
         type: Date,
         default: null,
         index: true
     }
-}, { 
-    timestamps: true, 
+}, {
+    timestamps: true,
     versionKey: false
 });
 

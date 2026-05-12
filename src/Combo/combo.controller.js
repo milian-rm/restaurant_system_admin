@@ -75,13 +75,17 @@ export const getComboById = async (req, res) => {
 // Crear combo
 export const createCombo = async (req, res) => {
   try {
-    const {
+    let {
       ComboName,
       ComboDescription,
       ComboList,
       ComboDiscount = 0,
       ComboStatus,
     } = req.body;
+
+    if (typeof ComboList === 'string') {
+      ComboList = JSON.parse(ComboList);
+    }
 
     if (!ComboList || ComboList.length === 0) {
       return res
@@ -118,8 +122,9 @@ export const createCombo = async (req, res) => {
       ComboDescription,
       ComboList,
       ComboDiscount: descuento,
-      ComboPrice, // calculado, no viene del cliente
+      ComboPrice,
       ...(ComboStatus && { ComboStatus }),
+      ...(req.file && { image: { url: req.file.path, public_id: req.file.filename } }),
     });
 
     await combo.save();
@@ -144,7 +149,16 @@ export const createCombo = async (req, res) => {
 export const updateCombo = async (req, res) => {
   try {
     const { id } = req.params;
-    const data = req.body;
+    let data = req.body; // Usamos let por si necesitamos reasignar
+
+    // 1. Convertir ComboList de String a Array si viene de FormData
+    if (data.ComboList && typeof data.ComboList === 'string') {
+      data.ComboList = JSON.parse(data.ComboList);
+    }
+
+    if (req.file) {
+      data.image = { url: req.file.path, public_id: req.file.filename };
+    }
 
     if (data.ComboList && Array.isArray(data.ComboList)) {
       if (data.ComboList.length === 0) {
@@ -154,16 +168,23 @@ export const updateCombo = async (req, res) => {
         });
       }
 
+      let totalBruto = 0;
       for (const item of data.ComboList) {
-        const productExists = await Product.findById(item.productId);
+        const product = await Product.findById(item.productId);
 
-        if (!productExists) {
+        if (!product) {
           return res.status(404).json({
             success: false,
             message: `El producto con ID ${item.productId} no existe`,
           });
         }
+        totalBruto += product.precio * item.cantidad;
       }
+
+      const descuento = Number(data.ComboDiscount) || 0;
+      data.ComboPrice = parseFloat(
+        (totalBruto * (1 - descuento / 100)).toFixed(2)
+      );
     }
 
     const combo = await Combo.findByIdAndUpdate(id, data, {
@@ -180,7 +201,7 @@ export const updateCombo = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Combo actualizado y validado exitosamente",
+      message: "Combo actualizado y precio recalculado exitosamente",
       data: combo,
     });
   } catch (error) {
