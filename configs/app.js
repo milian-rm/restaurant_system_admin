@@ -33,6 +33,7 @@ import orderRequestRoutes from '../src/OrderRequest/orderRequest.routes.js'
 import reviewRoutes from '../src/Review/review.routes.js'
 import additionalServices from '../src/AdditionalServices/additionalService.routes.js';
 import couponRoutes from '../src/Coupon/coupon.routes.js'
+import User from '../src/User/user.model.js';
 
 const middleware = (app) => {
     app.use(helmet(helmetConfiguration));
@@ -75,7 +76,7 @@ export const initDefaultConfig = async () => {
                 UserName: 'Consumidor',
                 UserSurname: 'Final',
                 UserEmail: 'cf@kinal.edu.gt',
-                UserPassword: 'Password123!',
+                password: 'Password123!',
                 UserPhone: '00000000',
                 role: 'CLIENT',
                 status: true
@@ -93,6 +94,7 @@ const initServer = async () => {
 
     try {
         await dbConnection();
+        await initDefaultConfig();
         middleware(app);
 
         // Las rutas deben cargarse ANTES que el manejador de errores

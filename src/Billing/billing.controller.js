@@ -85,6 +85,7 @@ export const createBilling = async (req, res) => {
     const {
       Order: orderId,
       BillPaymentMethod,
+      BillSerie,
       clientId,
       newClientData,
     } = req.body;
@@ -121,6 +122,7 @@ export const createBilling = async (req, res) => {
         const newUser = await User.create({
           ...newClientData,
           password: "Password123!",
+          UserPhone: newClientData.UserPhone || "00000000",
           role: "CLIENT",
           isVerified: true,
         });
@@ -129,16 +131,23 @@ export const createBilling = async (req, res) => {
     }
 
     if (!finalClientId) {
-      const cfUser = await User.findOne({ UserEmail: 'cf@kinal.edu.gt' });
-      
+      let cfUser = await User.findOne({ UserEmail: 'cf@kinal.edu.gt' });
+
       if (cfUser) {
         finalClientId = cfUser._id;
       } else {
-        // Por si olvidaste correr la función de inicio que crea el CF
-        return res.status(500).json({
-          success: false,
-          message: "Error crítico: El usuario Consumidor Final (CF) no existe en la base de datos.",
+        // Si la base de datos está limpia y no existe el CF, lo creamos al instante
+        const newCfUser = await User.create({
+          UserName: 'Consumidor',
+          UserSurname: 'Final',
+          UserEmail: 'cf@kinal.edu.gt',
+          password: 'Password123!',
+          UserPhone: '00000000',
+          role: 'CLIENT',
+          isVerified: true,
         });
+        finalClientId = newCfUser._id;
+        console.log("Usuario CF creado automáticamente por el sistema");
       }
     }
 
@@ -150,6 +159,7 @@ export const createBilling = async (req, res) => {
       branchId: order.branchId,
       client: finalClientId,
       Order: orderId,
+      BillSerie: BillSerie || `FAC-${Date.now()}`,
       BillSubtotal: Number(subtotal.toFixed(2)),
       BillIVA: Number(iva.toFixed(2)),
       BillTotal: Number(total.toFixed(2)),
@@ -210,6 +220,7 @@ export const payBilling = async (req, res) => {
         const newUser = await User.create({
           ...newClientData,
           password: "Password123!",
+          UserPhone: newClientData.UserPhone || "00000000",
           role: "CLIENT",
           isVerified: true,
         });
