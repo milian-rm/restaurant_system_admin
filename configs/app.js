@@ -21,8 +21,6 @@ import inventoryRoutes from '../src/Inventory/inventory.routes.js';
 import menuRoutes from '../src/Menú/menu.routes.js';
 import tableRoutes from '../src/Table/table.routes.js'; // ACTIVADO
 import reservationRoutes from '../src/Reservation/reservation.routes.js';
-//import saleRoutes from '../src/Sale/sale.routes.js';
-//import employeeRoutes from '../src/Employee/employee.routes.js';
 import productRoutes from '../src/Product/product.routes.js';
 import orderRoutes from '../src/Order/order.routes.js';
 import orderDetailRoutes from '../src/OrderDetail/orderDetail.routes.js';
@@ -33,6 +31,7 @@ import orderRequestRoutes from '../src/OrderRequest/orderRequest.routes.js'
 import reviewRoutes from '../src/Review/review.routes.js'
 import additionalServices from '../src/AdditionalServices/additionalService.routes.js';
 import couponRoutes from '../src/Coupon/coupon.routes.js'
+import dashboardRoutes from '../src/Dashboard/dashboard.routes.js';
 import User from '../src/User/user.model.js';
 
 const middleware = (app) => {
@@ -64,7 +63,7 @@ const routes = (app) => {
     app.use(`${BASE_URL}/reviews`, reviewRoutes);
     app.use(`${BASE_URL}/AS`, additionalServices);
     app.use(`${BASE_URL}/coupons`, couponRoutes);
-
+    app.use(`${BASE_URL}/dashboard`, dashboardRoutes);
 
 }
 
