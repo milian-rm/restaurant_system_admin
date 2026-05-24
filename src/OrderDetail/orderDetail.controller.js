@@ -1,3 +1,4 @@
+// src/OrderDetail/orderDetail.controller.js
 'use strict';
 
 import Order from '../Order/order.model.js';
@@ -5,6 +6,7 @@ import OrderDetail from './orderDetail.model.js';
 import Product from '../Product/product.model.js';
 import Combo from '../Combo/combo.model.js';
 import Inventory from '../Inventory/inventory.model.js';
+import Billing from '../Billing/billing.model.js';
 
 const buildInventoryNeeds = async ({ productoId, comboId, qty }) => {
   const needs = new Map();
@@ -157,6 +159,24 @@ export const createOrderDetail = async (req, res) => {
         message: 'Orden no encontrada'
       });
     }
+
+    // ── FIX 1: Blindar contra órdenes ya finalizadas ──────────────────────────
+    if (existingOrder.estado === 'Entregado' || existingOrder.estado === 'Cancelado') {
+      return res.status(400).json({
+        success: false,
+        message: `No se pueden agregar productos a una orden con estado "${existingOrder.estado}"`
+      });
+    }
+
+    // Verificar si la factura vinculada ya fue pagada
+    const linkedBilling = await Billing.findOne({ Order: order });
+    if (linkedBilling && linkedBilling.BillStatus === 'PAYED') {
+      return res.status(400).json({
+        success: false,
+        message: 'No se pueden agregar productos: la factura vinculada a esta orden ya fue pagada'
+      });
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const { needs, unitPrice } = await buildInventoryNeeds({
       productoId,
