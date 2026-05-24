@@ -181,7 +181,8 @@ export const createOrder = async (req, res) => {
 
         const order = await Order.create({
             branchId,
-            mesaId: orderType === 'DINE_IN' ? mesaId : null,
+            // Para TAKEAWAY/DELIVERY estos campos quedan como null
+            mesaId:     orderType === 'DINE_IN' ? mesaId     : null,
             empleadoId: orderType === 'DINE_IN' ? empleadoId : null,
             orderType,
             coupon: appliedCouponId,
@@ -220,36 +221,46 @@ export const updateOrder = async (req, res) => {
     try {
         const { id } = req.params;
 
+        // Extraemos y descartamos los campos que NO deben modificarse una vez
+        // que la orden fue creada. El resto del body (ej. estado, total) sí se aplica.
+        const {
+            empleadoId,  // inmutable — se ignora aunque venga en el body
+            branchId,    // inmutable
+            mesaId,      // inmutable
+            orderType,   // inmutable
+            ...mutableFields
+        } = req.body;
+
         const order = await Order.findByIdAndUpdate(
             id,
-            req.body,
+            mutableFields,
             {
                 new: true,
-                runValidators: true
+                runValidators: true,
             }
         )
-            .populate('mesaId', 'numberTable capacity')
+            .populate('mesaId',     'numberTable capacity')
             .populate('empleadoId', 'UserName UserSurname')
-            .populate('branchId', 'name');
+            .populate('branchId',   'name');
 
         if (!order) {
             return res.status(404).json({
                 success: false,
-                message: 'Orden no encontrada'
+                message: 'Orden no encontrada',
             });
         }
 
         res.status(200).json({
             success: true,
             message: 'Orden actualizada exitosamente',
-            data: order
+            data: order,
         });
 
     } catch (error) {
         res.status(400).json({
             success: false,
             message: 'Error al actualizar la orden',
-            error: error.message
+            error: error.message,
         });
     }
 };

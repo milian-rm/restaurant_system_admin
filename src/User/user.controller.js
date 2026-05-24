@@ -71,6 +71,19 @@ export const createUser = async (req, res) => {
   try {
     const data = req.body;
 
+    // Blindaje contra duplicados: verificar por correo antes de intentar crear
+    if (data.UserEmail) {
+      const existing = await User.findOne({
+        UserEmail: data.UserEmail.toLowerCase().trim(),
+      });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: 'Este cliente ya se encuentra registrado',
+        });
+      }
+    }
+
     const user = new User(data);
     await user.save();
 
@@ -80,14 +93,23 @@ export const createUser = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: 'Usuario creado correctamente',
-      data: userResponse
+      data: userResponse,
     });
 
   } catch (error) {
+    // Captura también el error de índice único de Mongo (código 11000)
+    // como segunda línea de defensa
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Este cliente ya se encuentra registrado',
+      });
+    }
+
     return res.status(400).json({
       success: false,
       message: 'Error al crear usuario',
-      error: error.message
+      error: error.message,
     });
   }
 };

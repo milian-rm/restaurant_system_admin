@@ -7,6 +7,22 @@ import User from "../User/user.model.js";
 import OrderRequest from "../OrderRequest/orderRequest.model.js";
 
 /**
+ * Populate profundo reutilizable para la orden embebida en una factura.
+ * Garantiza que empleadoId, branchId y mesaId siempre lleguen como objetos.
+ */
+const populateBillingOrder = (query) =>
+  query
+    .populate("client", "UserName UserSurname UserEmail")
+    .populate({
+      path: "Order",
+      populate: [
+        { path: "empleadoId", select: "UserName UserSurname UserEmail role" },
+        { path: "branchId",   select: "name zone" },
+        { path: "mesaId",     select: "numberTable capacity" },
+      ],
+    });
+
+/**
  * Obtener facturas con paginación y filtro de estado
  */
 export const getBillings = async (req, res) => {
@@ -16,14 +32,14 @@ export const getBillings = async (req, res) => {
     const filter = {};
 
     if (BillStatus) filter.BillStatus = BillStatus;
-    if (branchId) filter.branchId = branchId;
+    if (branchId)   filter.branchId   = branchId;
 
-    const billings = await Billing.find(filter)
-      .populate("Order")
-      .populate("client", "UserName UserSurname UserEmail")
+    const baseQuery = Billing.find(filter)
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
       .sort({ BillDate: -1 });
+
+    const billings = await populateBillingOrder(baseQuery);
 
     const total = await Billing.countDocuments(filter);
 
@@ -31,10 +47,10 @@ export const getBillings = async (req, res) => {
       success: true,
       data: billings,
       pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / parseInt(limit)),
+        currentPage:  parseInt(page),
+        totalPages:   Math.ceil(total / parseInt(limit)),
         totalRecords: total,
-        limit: parseInt(limit),
+        limit:        parseInt(limit),
       },
     });
   } catch (error) {
@@ -53,9 +69,7 @@ export const getBillingById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const billing = await Billing.findById(id)
-      .populate("Order")
-      .populate("client", "UserName UserSurname UserEmail");
+    const billing = await populateBillingOrder(Billing.findById(id));
 
     if (!billing) {
       return res.status(404).json({
@@ -110,7 +124,6 @@ export const createBilling = async (req, res) => {
 
     let finalClientId = clientId;
 
-    // 1. Si mandan datos de cliente nuevo, lo creamos
     if (!clientId && newClientData) {
       const userExists = await User.findOne({
         UserEmail: newClientData.UserEmail.toLowerCase(),
@@ -131,41 +144,40 @@ export const createBilling = async (req, res) => {
     }
 
     if (!finalClientId) {
-      let cfUser = await User.findOne({ UserEmail: 'cf@kinal.edu.gt' });
+      let cfUser = await User.findOne({ UserEmail: "cf@kinal.edu.gt" });
 
       if (cfUser) {
         finalClientId = cfUser._id;
       } else {
-        // Si la base de datos está limpia y no existe el CF, lo creamos al instante
         const newCfUser = await User.create({
-          UserName: 'Consumidor',
-          UserSurname: 'Final',
-          UserEmail: 'cf@kinal.edu.gt',
-          password: 'Password123!',
-          UserPhone: '00000000',
-          role: 'CLIENT',
-          isVerified: true,
+          UserName:    "Consumidor",
+          UserSurname: "Final",
+          UserEmail:   "cf@kinal.edu.gt",
+          password:    "Password123!",
+          UserPhone:   "00000000",
+          role:        "CLIENT",
+          isVerified:  true,
         });
         finalClientId = newCfUser._id;
         console.log("Usuario CF creado automáticamente por el sistema");
       }
     }
 
-    const total = Number(order.total || 0);
+    const total    = Number(order.total || 0);
     const subtotal = total / 1.12;
-    const iva = total - subtotal;
+    const iva      = total - subtotal;
 
     const billing = await Billing.create({
-      branchId: order.branchId,
-      client: finalClientId,
-      Order: orderId,
-      BillSerie: BillSerie || `FAC-${Date.now()}`,
-      BillSubtotal: Number(subtotal.toFixed(2)),
-      BillIVA: Number(iva.toFixed(2)),
-      BillTotal: Number(total.toFixed(2)),
+      branchId:          order.branchId,
+      client:            finalClientId,
+      Order:             orderId,
+      BillSerie:         BillSerie || `FAC-${Date.now()}`,
+      BillSubtotal:      Number(subtotal.toFixed(2)),
+      BillIVA:           Number(iva.toFixed(2)),
+      BillTotal:         Number(total.toFixed(2)),
       BillPaymentMethod: BillPaymentMethod || "CASH",
-      BillStatus: "GENERATED",
-      BillDate: new Date(),
+      BillStatus:        "GENERATED",
+      BillDate:          new Date(),
     });
 
     return res.status(201).json({
@@ -181,6 +193,7 @@ export const createBilling = async (req, res) => {
     });
   }
 };
+
 /**
  * Pagar factura y liberar mesa
  */
@@ -205,7 +218,7 @@ export const payBilling = async (req, res) => {
       });
     }
 
-    let finalClientId = billing.client; // Si no mandan nada, se queda con el CF
+    let finalClientId = billing.client;
 
     if (clientId) {
       finalClientId = clientId;
@@ -219,9 +232,9 @@ export const payBilling = async (req, res) => {
       } else {
         const newUser = await User.create({
           ...newClientData,
-          password: "Password123!",
+          password:  "Password123!",
           UserPhone: newClientData.UserPhone || "00000000",
-          role: "CLIENT",
+          role:      "CLIENT",
           isVerified: true,
         });
         finalClientId = newUser._id;
@@ -286,46 +299,38 @@ export const syncBillingWithOrder = async (req, res) => {
 
     const billing = await Billing.findOne({ Order: orderId });
     if (!billing) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "Factura no encontrada para esta orden",
-        });
+      return res.status(404).json({
+        success: false,
+        message: "Factura no encontrada para esta orden",
+      });
     }
 
     if (billing.BillStatus === "PAYED") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "No se puede editar una factura ya pagada",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "No se puede editar una factura ya pagada",
+      });
     }
 
-    const total = Number(order.total || 0);
+    const total    = Number(order.total || 0);
     const subtotal = total / 1.12;
-    const iva = total - subtotal;
+    const iva      = total - subtotal;
 
     billing.BillSubtotal = Number(subtotal.toFixed(2));
-    billing.BillIVA = Number(iva.toFixed(2));
-    billing.BillTotal = Number(total.toFixed(2));
+    billing.BillIVA      = Number(iva.toFixed(2));
+    billing.BillTotal    = Number(total.toFixed(2));
     await billing.save();
 
-    return res
-      .status(200)
-      .json({
-        success: true,
-        message: "Factura sincronizada con la orden",
-        data: billing,
-      });
+    return res.status(200).json({
+      success: true,
+      message: "Factura sincronizada con la orden",
+      data: billing,
+    });
   } catch (error) {
-    return res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error al sincronizar factura",
-        error: error.message,
-      });
+    return res.status(500).json({
+      success: false,
+      message: "Error al sincronizar factura",
+      error: error.message,
+    });
   }
 };
