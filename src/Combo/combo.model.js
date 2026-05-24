@@ -7,6 +7,7 @@ const comboSchema = new mongoose.Schema({
         type: String,
         required: [true, 'El nombre es requerido'],
         trim: true,
+        minlength: [3, 'El nombre debe tener al menos 3 caracteres'],
         maxlength: [100, 'El nombre no puede tener más de 100 caracteres']
     },
     ComboList: [{
@@ -18,7 +19,7 @@ const comboSchema = new mongoose.Schema({
         cantidad: {
             type: Number,
             required: true,
-            default: 1, // 1 papas, 2 hamburguesas, etc...
+            default: 1,
             min: [1, 'La cantidad mínima es 1']
         }
     }],
@@ -31,15 +32,19 @@ const comboSchema = new mongoose.Schema({
         type: String,
         required: [true, 'La descripción es requerida'],
         trim: true,
-        maxlength: [100, 'La descripción no puede tener más de 100 caracteres']
+        minlength: [5, 'La descripción debe tener al menos 5 caracteres'],
+        maxlength: [300, 'La descripción no puede tener más de 300 caracteres']
     },
     ComboPrice: {
         type: Number,
         required: [true, 'El precio es requerido'],
+        min: [0, 'El precio no puede ser negativo']
     },
     ComboDiscount: {
         type: Number,
         default: 0,
+        min: [0, 'El descuento no puede ser negativo'],
+        max: [100, 'El descuento no puede superar el 100%']
     },
     ComboStatus: {
         type: String,

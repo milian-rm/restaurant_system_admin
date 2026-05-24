@@ -19,25 +19,28 @@ const productSchema = new mongoose.Schema({
         cantidadUsada: {
             type: Number,
             required: true,
-            default: 1 // 1 pan, 2 lechugas, 2 carnes, etc....
+            default: 1,
+            min: [1, 'La cantidad usada debe ser al menos 1']
         }
     }],
     nombre: {
         type: String,
-        required: true,
+        required: [true, 'El nombre es obligatorio'],
         trim: true,
-        maxlength: [100, 'El nombre no puede exceder los 100 caracteres']
+        minlength: [2, 'El nombre debe tener al menos 2 caracteres'],
+        maxlength: [100, 'El nombre no puede exceder 100 caracteres']
     },
     categoria: {
         type: String,
-        required: true,
+        required: [true, 'La categoría es obligatoria'],
         trim: true,
-        maxlength: [50, 'La categoría no puede exceder los 50 caracteres']
+        minlength: [2, 'La categoría debe tener al menos 2 caracteres'],
+        maxlength: [50, 'La categoría no puede exceder 50 caracteres']
     },
     precio: {
         type: Number,
-        required: true,
-        min: [0, 'El precio no puede ser negativo']
+        required: [true, 'El precio es obligatorio'],
+        min: [0.01, 'El precio debe ser mayor a 0']
     },
     imagen_url: {
         type: String,
@@ -48,7 +51,6 @@ const productSchema = new mongoose.Schema({
         enum: ['Disponible', 'Agotado', 'Descontinuado'],
         default: 'Disponible'
     },
-    // agregamos el campo para el Soft Delete:
     ProductStatus: {
         type: String,
         enum: ['ACTIVE', 'INACTIVE'],
@@ -60,7 +62,6 @@ const productSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-// Actualiza el índice para incluir ProductStatus 
 productSchema.index({ nombre: 1, categoria: 1, ProductStatus: 1 });
 
 export default mongoose.model('Product', productSchema);

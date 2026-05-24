@@ -271,6 +271,15 @@ export const changeOrderStatus = async (req, res) => {
         const { id } = req.params;
         const { estado } = req.body;
 
+        const VALID_STATES = ['Pendiente', 'En Preparacion', 'Listo', 'Entregado', 'Cancelado'];
+
+        if (!VALID_STATES.includes(estado)) {
+            return res.status(400).json({
+                success: false,
+                message: `Estado inválido: "${estado}". Los estados válidos son: ${VALID_STATES.join(', ')}`
+            });
+        }
+
         const order = await Order.findById(id);
 
         if (!order) {
@@ -280,12 +289,36 @@ export const changeOrderStatus = async (req, res) => {
             });
         }
 
+        // Protección de transiciones imposibles: estados terminales no pueden cambiar
+        const TERMINAL_STATES = ['Entregado', 'Cancelado'];
+
+        if (TERMINAL_STATES.includes(order.estado)) {
+            return res.status(400).json({
+                success: false,
+                message: `No se puede cambiar el estado de una orden "${order.estado}". Es un estado final.`
+            });
+        }
+
+        // Mapa de transiciones permitidas
+        const ALLOWED_TRANSITIONS = {
+            'Pendiente':      ['En Preparacion', 'Cancelado'],
+            'En Preparacion': ['Listo', 'Cancelado'],
+            'Listo':          ['Entregado', 'Cancelado'],
+        };
+
+        const allowed = ALLOWED_TRANSITIONS[order.estado] || [];
+        if (!allowed.includes(estado)) {
+            return res.status(400).json({
+                success: false,
+                message: `Transición inválida: no se puede pasar de "${order.estado}" a "${estado}".`
+            });
+        }
+
         order.estado = estado;
         await order.save();
 
         if ((estado === 'Entregado' || estado === 'Cancelado') && order.mesaId) {
             const table = await Table.findById(order.mesaId);
-
             if (table) {
                 table.availability = 'Disponible';
                 await table.save();

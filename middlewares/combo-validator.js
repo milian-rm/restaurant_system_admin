@@ -6,15 +6,15 @@ export const validateCreateCombo = [
         .trim()
         .notEmpty()
         .withMessage('El nombre es requerido')
-        .isLength({ max: 100 })
-        .withMessage('El nombre no puede tener más de 100 caracteres'),
+        .isLength({ min: 3, max: 100 })
+        .withMessage('El nombre debe tener entre 3 y 100 caracteres'),
 
     body('ComboDescription')
         .trim()
         .notEmpty()
         .withMessage('La descripción es requerida')
-        .isLength({ max: 100 })
-        .withMessage('La descripción no puede tener más de 100 caracteres'),
+        .isLength({ min: 5, max: 300 })
+        .withMessage('La descripción debe tener entre 5 y 300 caracteres'),
 
     body('ComboDiscount')
         .optional()
@@ -37,23 +37,24 @@ export const validateUpdateComboRequest = [
     body('ComboName')
         .optional()
         .trim()
-        .isLength({ max: 100 })
-        .withMessage('El nombre no puede tener más de 100 caracteres'),
+        .isLength({ min: 3, max: 100 })
+        .withMessage('El nombre debe tener entre 3 y 100 caracteres'),
 
     body('ComboDescription')
         .optional()
         .trim()
-        .isLength({ max: 100 })
-        .withMessage('La descripción no puede tener más de 100 caracteres'),
+        .isLength({ min: 5, max: 300 })
+        .withMessage('La descripción debe tener entre 5 y 300 caracteres'),
 
     body('ComboPrice')
         .optional()
-        .isNumeric()
-        .withMessage('El precio debe ser un número válido'),
+        .isFloat({ min: 0 })
+        .withMessage('El precio no puede ser negativo'),
 
     body('ComboDiscount')
         .optional()
-        .trim(),
+        .isFloat({ min: 0, max: 100 })
+        .withMessage('El descuento debe ser un número entre 0 y 100'),
 
     body('ComboStatus')
         .optional()
