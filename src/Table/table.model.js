@@ -6,16 +6,19 @@ const tableSchema = Schema({
     branchId: {
         type: Schema.Types.ObjectId,
         ref: 'Branch',
-        required: true
+        required: [true, 'La sucursal es obligatoria']
     },
     numberTable: {
         type: Number,
-        required: [true, 'El número de mesa es obligatorio']
-        // NO unique aquí
+        required: [true, 'El número de mesa es obligatorio'],
+        min: [1, 'El número de mesa mínimo es 1'],
+        max: [1000, 'El número de mesa no puede exceder 1000']
     },
     capacity: {
         type: Number,
-        required: [true, 'La capacidad es obligatoria']
+        required: [true, 'La capacidad es obligatoria'],
+        min: [1, 'La capacidad mínima es 1 persona'],
+        max: [50, 'La capacidad máxima es 50 personas']
     },
     TableStatus: {
         type: String,
