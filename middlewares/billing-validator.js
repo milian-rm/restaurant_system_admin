@@ -11,14 +11,29 @@ export const validateCreateBilling = [
     body('BillSerie')
         .optional()
         .trim()
-        .isLength({ max: 35 })
-        .withMessage('La serie de la factura no puede tener más de 35 caracteres'),
+        .isLength({ min: 3, max: 35 })
+        .withMessage('La serie debe tener entre 3 y 35 caracteres'),
 
     body('BillPaymentMethod')
         .notEmpty()
         .withMessage('El método de pago es requerido')
         .isIn(['CASH', 'CARD'])
         .withMessage('Método de pago no válido'),
+
+    body('BillSubtotal')
+        .optional()
+        .isFloat({ min: 0 })
+        .withMessage('El subtotal no puede ser negativo'),
+
+    body('BillIVA')
+        .optional()
+        .isFloat({ min: 0 })
+        .withMessage('El IVA no puede ser negativo'),
+
+    body('BillTotal')
+        .optional()
+        .isFloat({ min: 0 })
+        .withMessage('El total no puede ser negativo'),
 
     checkValidators,
 ];
@@ -31,13 +46,28 @@ export const validateUpdateBillingRequest = [
     body('BillSerie')
         .optional()
         .trim()
-        .isLength({ max: 35 })
-        .withMessage('La serie no puede tener más de 35 caracteres'),
+        .isLength({ min: 3, max: 35 })
+        .withMessage('La serie debe tener entre 3 y 35 caracteres'),
 
     body('BillPaymentMethod')
         .optional()
         .isIn(['CASH', 'CARD'])
         .withMessage('Método de pago no válido'),
+
+    body('BillSubtotal')
+        .optional()
+        .isFloat({ min: 0 })
+        .withMessage('El subtotal no puede ser negativo'),
+
+    body('BillIVA')
+        .optional()
+        .isFloat({ min: 0 })
+        .withMessage('El IVA no puede ser negativo'),
+
+    body('BillTotal')
+        .optional()
+        .isFloat({ min: 0 })
+        .withMessage('El total no puede ser negativo'),
 
     checkValidators,
 ];

@@ -8,7 +8,7 @@ const billingSchema = new mongoose.Schema({
         ref: 'Branch',
         required: true
     },
-    client: { 
+    client: {
         type: Schema.Types.ObjectId,
         ref: 'User',
         required: [true, 'El cliente es obligatorio para la factura']
@@ -17,6 +17,7 @@ const billingSchema = new mongoose.Schema({
         type: String,
         required: [true, 'La serie de la factura es requerida'],
         trim: true,
+        minlength: [3, 'La serie debe tener al menos 3 caracteres'],
         maxlength: [35, 'La serie de la factura no puede tener más de 35 caracteres'],
     },
     BillDate: {
@@ -29,13 +30,19 @@ const billingSchema = new mongoose.Schema({
         default: null
     },
     BillSubtotal: {
-        type: Number
+        type: Number,
+        min: [0, 'El subtotal no puede ser negativo'],
+        default: 0
     },
     BillIVA: {
-        type: Number
+        type: Number,
+        min: [0, 'El IVA no puede ser negativo'],
+        default: 0
     },
     BillTotal: {
-        type: Number
+        type: Number,
+        min: [0, 'El total no puede ser negativo'],
+        default: 0
     },
     BillPaymentMethod: {
         type: String,
@@ -47,9 +54,9 @@ const billingSchema = new mongoose.Schema({
         enum: ['GENERATED', 'PAYED'],
         default: 'GENERATED'
     }
-}, { 
-    versionKey: false, 
-    timestamps: true 
+}, {
+    versionKey: false,
+    timestamps: true
 });
 
 billingSchema.index({ BillSerie: 1, client: 1 });

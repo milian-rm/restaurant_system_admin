@@ -18,16 +18,17 @@ const reservationSchema = new Schema({
     },
     date: {
         type: Date,
-        required: true
+        required: [true, 'La fecha es obligatoria']
     },
     time: {
         type: String,
-        required: true
+        required: [true, 'La hora es obligatoria']
     },
     numberOfPersons: {
         type: Number,
-        required: true,
-        min: 1
+        required: [true, 'La cantidad de personas es obligatoria'],
+        min: [1, 'Debe haber al menos 1 persona'],
+        max: [50, 'El límite por reservación es 50 personas']
     },
     status: {
         type: String,
@@ -42,17 +43,16 @@ const reservationSchema = new Schema({
     },
     notes: {
         type: String,
-        trim: true
+        trim: true,
+        maxlength: [250, 'Las notas no pueden exceder 250 caracteres']
     }
 }, {
     versionKey: false,
     timestamps: true
 });
 
-/* Índices recomendados */
 reservationSchema.index({ branchId: 1, date: 1 });
 reservationSchema.index({ tableId: 1, date: 1, time: 1 });
-// Índice para filtrar rápidamente las activas
 reservationSchema.index({ statusRes: 1 });
 
 export default model('Reservation', reservationSchema);

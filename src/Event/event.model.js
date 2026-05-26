@@ -15,8 +15,10 @@ const eventSchema = new Schema({
 
     name: {
         type: String,
-        required: true,
-        trim: true
+        required: [true, 'El nombre del evento es obligatorio'],
+        trim: true,
+        minlength: [5, 'El nombre debe tener al menos 5 caracteres'],
+        maxlength: [100, 'El nombre no puede exceder 100 caracteres']
     },
 
     additionalServices: [{
@@ -29,23 +31,24 @@ const eventSchema = new Schema({
 
     eventDate: {
         type: Date,
-        required: true
+        required: [true, 'La fecha del evento es obligatoria']
     },
 
     startTime: {
         type: String,
-        required: true
+        required: [true, 'La hora de inicio es obligatoria']
     },
 
     endTime: {
         type: String,
-        required: true
+        required: [true, 'La hora de finalización es obligatoria']
     },
 
     numberOfPersons: {
         type: Number,
-        required: true,
-        min: 1
+        required: [true, 'La cantidad de personas es obligatoria'],
+        min: [1, 'Debe haber al menos 1 persona'],
+        max: [1000, 'El límite es 1000 personas']
     },
 
     tables: [{
@@ -61,7 +64,8 @@ const eventSchema = new Schema({
 
     notes: {
         type: String,
-        trim: true
+        trim: true,
+        maxlength: [500, 'Las notas no pueden exceder 500 caracteres']
     }
 
 }, {
