@@ -202,7 +202,12 @@ export const payBilling = async (req, res) => {
     const { id } = req.params;
     const { clientId, newClientData } = req.body;
 
-    const billing = await Billing.findById(id).populate("Order");
+    let billing = await Billing.findById(id).populate("Order");
+
+    if (!billing) {
+      // Intento de búsqueda por orderId como fallback defensivo
+      billing = await Billing.findOne({ Order: id }).populate("Order");
+    }
 
     if (!billing) {
       return res.status(404).json({
@@ -232,9 +237,9 @@ export const payBilling = async (req, res) => {
       } else {
         const newUser = await User.create({
           ...newClientData,
-          password:  "Password123!",
-          UserPhone: newClientData.UserPhone || "00000000",
-          role:      "CLIENT",
+          password:   "Password123!",
+          UserPhone:  newClientData.UserPhone || "00000000",
+          role:       "CLIENT",
           isVerified: true,
         });
         finalClientId = newUser._id;
@@ -249,7 +254,6 @@ export const payBilling = async (req, res) => {
 
     if (order && order.mesaId) {
       const table = await Table.findById(order.mesaId);
-
       if (table) {
         table.availability = "Disponible";
         await table.save();
