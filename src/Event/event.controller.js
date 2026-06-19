@@ -2,6 +2,7 @@
 
 import Event from './event.model.js';
 import Table from '../Table/table.model.js';
+import Reservation from '../Reservation/reservation.model.js';
 
 // 1. Ver eventos (Paginado y Filtrado)
 export const getEvents = async (req, res) => {
