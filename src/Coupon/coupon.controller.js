@@ -1,4 +1,5 @@
 import Coupon from './coupon.model.js';
+import CouponUsage from '../CouponUsage/couponUsage.model.js';
 
 export const createCoupon = async (req, res) => {
     try {
@@ -126,5 +127,44 @@ export const deleteCoupon = async (req, res) => {
             message: 'Error al procesar el cambio de estado del cupón',
             error: error.message 
         });
+    }
+};
+
+/**
+ * Ver historial de usos de un cupón específico (Admin)
+ * GET /coupon/:id/usage
+ * Devuelve quién usó el cupón y cuándo, paginado.
+ */
+export const getCouponUsage = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const page  = Math.max(1, parseInt(req.query.page)  || 1);
+        const limit = Math.min(50, parseInt(req.query.limit) || 20);
+        const skip  = (page - 1) * limit;
+
+        const coupon = await Coupon.findById(id);
+        if (!coupon) {
+            return res.status(404).json({ success: false, message: 'Cupón no encontrado' });
+        }
+
+        const [usages, total] = await Promise.all([
+            CouponUsage.find({ coupon: id })
+                .populate('customer', 'UserName UserSurname UserEmail')
+                .sort({ usedAt: -1 })
+                .skip(skip)
+                .limit(limit),
+            CouponUsage.countDocuments({ coupon: id })
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                coupon: { id: coupon._id, code: coupon.code },
+                usages,
+                pagination: { total, page, limit, pages: Math.ceil(total / limit) }
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
     }
 };

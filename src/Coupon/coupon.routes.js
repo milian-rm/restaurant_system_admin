@@ -6,7 +6,8 @@ import {
     createCoupon, 
     getCoupons, 
     updateCoupon, 
-    deleteCoupon 
+    deleteCoupon,
+    getCouponUsage
 } from './coupon.controller.js';
 
 import { createCouponValidator } from '../../middlewares/coupon-validator.js';
@@ -64,6 +65,19 @@ router.patch(
         hasRole('PLATFORM_ADMIN')
     ], 
     deleteCoupon
+);
+
+/**
+ * GET - Historial de usos de un cupón por cliente
+ * Útil para auditoría y soporte. Soporta ?page=1&limit=20
+ */
+router.get(
+    '/:id/usage',
+    [
+        validateJWT,
+        hasRole('PLATFORM_ADMIN')
+    ],
+    getCouponUsage
 );
 
 export default router;
