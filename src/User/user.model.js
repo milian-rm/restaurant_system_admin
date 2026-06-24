@@ -56,6 +56,14 @@ const userSchema = new mongoose.Schema({
     UserCreatedAt: {
         type: Date,
         default: Date.now
+    },
+    addresses: {
+        type: [{
+            label: { type: String, trim: true, maxlength: 30 },
+            address: { type: String, trim: true, maxlength: 200 },
+            isDefault: { type: Boolean, default: false }
+        }],
+        default: null
     }
 });
 
@@ -80,6 +88,9 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 userSchema.methods.toJSON = function () {
     const { __v, password, _id, ...user } = this.toObject();
     user.uid = _id;
+    user.addresses = Array.isArray(user.addresses)
+        ? user.addresses.map(({ _id, ...addr }) => ({ ...addr, addressId: _id }))
+        : null;
     return user;
 };
 

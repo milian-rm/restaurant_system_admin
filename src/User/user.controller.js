@@ -124,6 +124,7 @@ export const updateUser = async (req, res) => {
     const updates = req.body;
 
     delete updates.password;
+    delete updates.addresses;
 
     const user = await User.findByIdAndUpdate(id, updates, {
       new: true,
