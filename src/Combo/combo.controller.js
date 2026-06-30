@@ -81,40 +81,66 @@ export const createCombo = async (req, res) => {
       ComboList,
       ComboDiscount = 0,
       ComboStatus,
+      Branches,
     } = req.body;
 
-    if (typeof ComboList === 'string') {
+    if (typeof ComboList === "string") {
       ComboList = JSON.parse(ComboList);
     }
 
-    if (!ComboList || ComboList.length === 0) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "El combo debe tener al menos un producto",
-        });
+    if (typeof Branches === "string") {
+      Branches = JSON.parse(Branches);
     }
 
-    // Calcular precio total sumando precio * cantidad de cada producto
+    if (!ComboList || ComboList.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "El combo debe tener al menos un producto",
+      });
+    }
+
+    if (!Branches || Branches.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "El combo debe estar asignado a al menos una sucursal",
+      });
+    }
+
+    const comboBranchIds = Branches.map((b) => b.BranchId?.toString());
+
+    // Calcular precio y validar que cada producto pertenezca a la sucursal del combo
     let totalBruto = 0;
     for (const item of ComboList) {
       const product = await Product.findById(item.productId);
+
       if (!product) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: `El producto con ID ${item.productId} no existe`,
-          });
+        return res.status(404).json({
+          success: false,
+          message: `El producto con ID ${item.productId} no existe`,
+        });
       }
+
+      // Validar que el producto esté disponible en la misma sucursal del combo
+      const productBranchIds = (product.Branches || []).map((b) =>
+        b.BranchId?.toString()
+      );
+      const hasCommon = comboBranchIds.some((id) =>
+        productBranchIds.includes(id)
+      );
+      if (!hasCommon) {
+        return res.status(400).json({
+          success: false,
+          message: `El producto "${product.nombre}" no está disponible en la sucursal seleccionada para este combo`,
+        });
+      }
+
       totalBruto += product.precio * item.cantidad;
     }
 
     // Aplicar descuento: si pones 10, descuenta 10%
     const descuento = Number(ComboDiscount) || 0;
     const ComboPrice = parseFloat(
-      (totalBruto * (1 - descuento / 100)).toFixed(2),
+      (totalBruto * (1 - descuento / 100)).toFixed(2)
     );
 
     const combo = new Combo({
@@ -123,8 +149,11 @@ export const createCombo = async (req, res) => {
       ComboList,
       ComboDiscount: descuento,
       ComboPrice,
+      Branches,
       ...(ComboStatus && { ComboStatus }),
-      ...(req.file && { image: { url: req.file.path, public_id: req.file.filename } }),
+      ...(req.file && {
+        image: { url: req.file.path, public_id: req.file.filename },
+      }),
     });
 
     await combo.save();
@@ -135,13 +164,11 @@ export const createCombo = async (req, res) => {
       data: combo,
     });
   } catch (error) {
-    return res
-      .status(400)
-      .json({
-        success: false,
-        message: "Error al crear el combo",
-        error: error.message,
-      });
+    return res.status(400).json({
+      success: false,
+      message: "Error al crear el combo",
+      error: error.message,
+    });
   }
 };
 
@@ -149,11 +176,15 @@ export const createCombo = async (req, res) => {
 export const updateCombo = async (req, res) => {
   try {
     const { id } = req.params;
-    let data = req.body; // Usamos let por si necesitamos reasignar
+    let data = req.body;
 
-    // 1. Convertir ComboList de String a Array si viene de FormData
-    if (data.ComboList && typeof data.ComboList === 'string') {
+    // Convertir ComboList y Branches de String a Array si viene de FormData
+    if (data.ComboList && typeof data.ComboList === "string") {
       data.ComboList = JSON.parse(data.ComboList);
+    }
+
+    if (data.Branches && typeof data.Branches === "string") {
+      data.Branches = JSON.parse(data.Branches);
     }
 
     if (req.file) {
@@ -168,6 +199,10 @@ export const updateCombo = async (req, res) => {
         });
       }
 
+      const comboBranchIds = (data.Branches || []).map((b) =>
+        b.BranchId?.toString()
+      );
+
       let totalBruto = 0;
       for (const item of data.ComboList) {
         const product = await Product.findById(item.productId);
@@ -178,6 +213,23 @@ export const updateCombo = async (req, res) => {
             message: `El producto con ID ${item.productId} no existe`,
           });
         }
+
+        // Validar sucursal solo si se están actualizando las Branches
+        if (comboBranchIds.length > 0) {
+          const productBranchIds = (product.Branches || []).map((b) =>
+            b.BranchId?.toString()
+          );
+          const hasCommon = comboBranchIds.some((id) =>
+            productBranchIds.includes(id)
+          );
+          if (!hasCommon) {
+            return res.status(400).json({
+              success: false,
+              message: `El producto "${product.nombre}" no está disponible en la sucursal seleccionada para este combo`,
+            });
+          }
+        }
+
         totalBruto += product.precio * item.cantidad;
       }
 

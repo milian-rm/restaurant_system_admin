@@ -77,13 +77,23 @@ export const createProduct = async (req, res) => {
             });
         }
 
-        for (const item of data.ingredientes) {
-            const inventoryExists = await Inventory.findById(item.inventoryId);
+        const branchIds = (data.Branches || []).map(b => b.BranchId);
 
-            if (!inventoryExists) {
+        for (const item of data.ingredientes) {
+            const inventoryItem = await Inventory.findById(item.inventoryId);
+
+            if (!inventoryItem) {
                 return res.status(404).json({
                     success: false,
                     message: `El ingrediente con ID ${item.inventoryId} no existe en el inventario`
+                });
+            }
+
+            // Validar que el ingrediente pertenezca a una de las sucursales del producto
+            if (branchIds.length > 0 && !branchIds.some(id => id?.toString() === inventoryItem.branchId?.toString())) {
+                return res.status(400).json({
+                    success: false,
+                    message: `El ingrediente "${inventoryItem.name}" no pertenece al inventario de la sucursal seleccionada`
                 });
             }
         }
