@@ -2,6 +2,7 @@
 
 import Order from './order.model.js';
 import OrderDetail from '../OrderDetail/orderDetail.model.js';
+import OrderRequest from '../OrderRequest/orderRequest.model.js';
 import Table from '../Table/table.model.js';
 import Coupon from '../Coupon/coupon.model.js';
 
@@ -316,6 +317,12 @@ export const changeOrderStatus = async (req, res) => {
 
         order.estado = estado;
         await order.save();
+
+        // Sincronizar estado con OrderRequest si existe
+        await OrderRequest.findOneAndUpdate(
+            { order: order._id },
+            { orderStatus: estado }
+        );
 
         if ((estado === 'Entregado' || estado === 'Cancelado') && order.mesaId) {
             const table = await Table.findById(order.mesaId);

@@ -6,7 +6,6 @@ import OrderDetail from './orderDetail.model.js';
 import Product from '../Product/product.model.js';
 import Combo from '../Combo/combo.model.js';
 import Inventory from '../Inventory/inventory.model.js';
-import Billing from '../Billing/billing.model.js';
 
 const buildInventoryNeeds = async ({ productoId, comboId, qty }) => {
   const needs = new Map();
@@ -47,9 +46,7 @@ const buildInventoryNeeds = async ({ productoId, comboId, qty }) => {
     }
     resolved.combo = combo;
 
-    const comboPrice = Number(combo.ComboPrice || 0);
-    const comboDiscount = Number(combo.ComboDiscount || 0);
-    unitPrice = Math.max(comboPrice - comboDiscount, 0);
+    unitPrice = Number(combo.ComboPrice || 0);
 
     if (!Array.isArray(combo.ComboList) || combo.ComboList.length === 0) {
       const err = new Error('El combo no tiene productos asociados (ComboList vacío)');
@@ -160,23 +157,13 @@ export const createOrderDetail = async (req, res) => {
       });
     }
 
-    // ── FIX 1: Blindar contra órdenes ya finalizadas ──────────────────────────
-    if (existingOrder.estado === 'Entregado' || existingOrder.estado === 'Cancelado') {
+    // Solo bloquear si la orden fue pagada
+    if (existingOrder.isPaid) {
       return res.status(400).json({
         success: false,
-        message: `No se pueden agregar productos a una orden con estado "${existingOrder.estado}"`
+        message: 'No se pueden agregar productos: la orden ya fue pagada'
       });
     }
-
-    // Verificar si la factura vinculada ya fue pagada
-    const linkedBilling = await Billing.findOne({ Order: order });
-    if (linkedBilling && linkedBilling.BillStatus === 'PAYED') {
-      return res.status(400).json({
-        success: false,
-        message: 'No se pueden agregar productos: la factura vinculada a esta orden ya fue pagada'
-      });
-    }
-    // ─────────────────────────────────────────────────────────────────────────
 
     const { needs, unitPrice } = await buildInventoryNeeds({
       productoId,
@@ -251,6 +238,14 @@ export const updateOrderDetail = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Item no encontrado'
+      });
+    }
+
+    const order = await Order.findById(detail.order);
+    if (order && order.isPaid) {
+      return res.status(400).json({
+        success: false,
+        message: 'No se puede modificar: la orden ya fue pagada'
       });
     }
 
@@ -346,6 +341,14 @@ export const deleteOrderDetail = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Item no encontrado'
+      });
+    }
+
+    const order = await Order.findById(detail.order);
+    if (order && order.isPaid) {
+      return res.status(400).json({
+        success: false,
+        message: 'No se puede eliminar: la orden ya fue pagada'
       });
     }
 
