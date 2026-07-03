@@ -265,6 +265,7 @@ export const payBilling = async (req, res) => {
 
     if (order) {
       order.estado = "Entregado";
+      order.isPaid = true;
       await order.save();
 
       await OrderRequest.findOneAndUpdate(
