@@ -34,6 +34,8 @@ export const validateJWT = async (req, res, next) => {
             role: userRole
         };
 
+        req.token = token;
+
         next();
 
     } catch (error) {

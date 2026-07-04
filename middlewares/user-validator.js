@@ -39,6 +39,10 @@ export const validateCreateUser = [
         .optional()
         .isIn(['ACTIVE', 'INACTIVE']).withMessage('Estado no válido'),
 
+    body('UserPhone')
+        .notEmpty().withMessage('El teléfono es requerido')
+        .matches(/^\d{8}$/).withMessage('El teléfono debe tener exactamente 8 dígitos'),
+
     checkValidators,
 ];
 

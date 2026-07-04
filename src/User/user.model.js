@@ -4,6 +4,12 @@ import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 
 const userSchema = new mongoose.Schema({
+    authId: {
+        type: String,
+        unique: true,
+        sparse: true, // permite null para empleados legados del flujo local
+        index: true,
+    },
     UserName: {
         type: String,
         required: [true, 'El nombre es requerido'],
@@ -25,7 +31,8 @@ const userSchema = new mongoose.Schema({
     },
     password: {
         type: String,
-        required: [true, 'La contraseña es requerida']
+        required: false,
+        select: false,
     },
     role: {
         type: String,
@@ -35,7 +42,7 @@ const userSchema = new mongoose.Schema({
     branchId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Branch',
-        required: function() {
+        required: function () {
             // Es obligatorio solo si es empleado o admin de sucursal
             return ['BRANCH_ADMIN', 'EMPLOYEE'].includes(this.role);
         }
@@ -69,7 +76,7 @@ const userSchema = new mongoose.Schema({
 
 // Middleware que incripta la contraseña antes de guardarla
 userSchema.pre('save', async function () {
-    if (!this.isModified('password')) return;
+    if (!this.isModified('password') || !this.password) return;
 
     try {
         const salt = await bcrypt.genSalt(10);
@@ -81,6 +88,7 @@ userSchema.pre('save', async function () {
 
 // Metodo para comparar las contraseñas
 userSchema.methods.comparePassword = async function (candidatePassword) {
+    if (!this.password) return false;
     return await bcrypt.compare(candidatePassword, this.password);
 };
 

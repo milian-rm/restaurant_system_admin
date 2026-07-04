@@ -26,13 +26,13 @@ import orderRoutes from '../src/Order/order.routes.js';
 import orderDetailRoutes from '../src/OrderDetail/orderDetail.routes.js';
 import branchRoutes from '../src/Branch/branch.routes.js';
 import billingRoutes from '../src/Billing/billing.routes.js';
-import authRoutes from '../src/Auth/auth.routes.js';
 import orderRequestRoutes from '../src/OrderRequest/orderRequest.routes.js'
 import reviewRoutes from '../src/Review/review.routes.js'
 import additionalServices from '../src/AdditionalServices/additionalService.routes.js';
 import couponRoutes from '../src/Coupon/coupon.routes.js'
 import dashboardRoutes from '../src/Dashboard/dashboard.routes.js';
 import User from '../src/User/user.model.js';
+import eventRequestRoutes from '../src/EventRequest/eventRequest.routes.js';
 
 const middleware = (app) => {
     app.use(helmet(helmetConfiguration));
@@ -58,12 +58,12 @@ const routes = (app) => {
     app.use(`${BASE_URL}/orderDetails`, orderDetailRoutes);
     app.use(`${BASE_URL}/branches`, branchRoutes);
     app.use(`${BASE_URL}/billings`, billingRoutes);
-    app.use(`${BASE_URL}/auth`, authRoutes);
     app.use(`${BASE_URL}/orderRequests`, orderRequestRoutes);
     app.use(`${BASE_URL}/reviews`, reviewRoutes);
     app.use(`${BASE_URL}/AS`, additionalServices);
     app.use(`${BASE_URL}/coupons`, couponRoutes);
     app.use(`${BASE_URL}/dashboard`, dashboardRoutes);
+    app.use(`${BASE_URL}/event-requests`, eventRequestRoutes);
 
 }
 
