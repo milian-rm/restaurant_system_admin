@@ -15,7 +15,7 @@ export const getEventRequests = async (req, res) => {
         const requests = await EventRequest.find(filter)
             .populate('branchId', 'name zone')
             .populate('clientId', 'UserName UserSurname email')
-            .populate('additionalServices.additionalServiceId', 'name price')
+            .populate('additionalServices.additionalServiceId', 'Name AdditionalPrice')
             .sort({ createdAt: -1 });
 
         return res.status(200).json({ success: true, data: requests });
@@ -31,8 +31,8 @@ export const getEventRequestById = async (req, res) => {
         const request = await EventRequest.findById(id)
             .populate('branchId', 'name zone')
             .populate('clientId', 'UserName UserSurname email')
-            .populate('additionalServices.additionalServiceId', 'name price');
-
+            .populate('additionalServices.additionalServiceId', 'Name AdditionalPrice');
+            
         if (!request) return res.status(404).json({ success: false, message: 'Solicitud no encontrada.' });
 
         return res.status(200).json({ success: true, data: request });
@@ -45,7 +45,7 @@ export const getEventRequestById = async (req, res) => {
 export const respondEventRequest = async (req, res) => {
     try {
         const { id } = req.params;
-        const { action } = req.body; // 'ACEPTAR' | 'RECHAZAR'
+        const { action, reason } = req.body; // 'ACEPTAR' | 'RECHAZAR'
 
         const request = await EventRequest.findById(id);
         if (!request) return res.status(404).json({ success: false, message: 'Solicitud no encontrada.' });
@@ -55,7 +55,11 @@ export const respondEventRequest = async (req, res) => {
         }
 
         if (action === 'RECHAZAR') {
+            if (!reason || !reason.trim()) {
+                return res.status(400).json({ success: false, message: 'Debes indicar un motivo de rechazo.' });
+            }
             request.status = 'Rechazada';
+            request.rejectionReason = reason.trim();
             await request.save();
             return res.status(200).json({ success: true, message: 'Solicitud rechazada.', data: request });
         }
